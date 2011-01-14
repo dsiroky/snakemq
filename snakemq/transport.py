@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Packet format: [4B size|1B type|payload], size is bytes number of all following
+Packet format: [4B size|payload], size is bytes number of all following
 the the first 4 bytes including the type byte.
 
 @author: David Siroky (siroky@dasir.cz)
 """
-# TODO SSL
 
 import logging
 import struct

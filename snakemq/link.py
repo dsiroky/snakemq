@@ -32,7 +32,6 @@ def _empty_func(*args, **kwargs):
 ############################################################################
 
 class Link(object):
-    # TODO better error handling (like name resolution error)
     """
     Just a bare wire stream communication. Keeper of opened (TCP) connections.
     NOT thread-safe except L{C{Link.send()}}.
@@ -111,7 +110,7 @@ class Link(object):
         
     ##########################################################
 
-    def add_connector(self, address, reconnect_interval=1):
+    def add_connector(self, address, reconnect_interval=1.0):
         """
         Thread-safe.
         This will not create an immediate connection. It just adds a connector
@@ -119,6 +118,8 @@ class Link(object):
         @param address: remote address
         @param reconnect_interval: reconnect interval in seconds
         """
+        assert isinstance(reconnect_interval, (int, float))
+        address = socket.gethostbyname(address[0]), address[1]
         with self.lock:
             self._reconnect_intervals[address] = reconnect_interval
             self.plan_connect(0, address) # connect ASAP
@@ -132,10 +133,10 @@ class Link(object):
         with self.lock:
             del self._reconnect_intervals[address]
             # filter out address from plan
-            self._plannned_connections = [
-                (when, _address) for (when, _address) in self._plannned_connections
-                      if _address != address
-              ]
+            self._plannned_connections = \
+                [(when, _address)
+                      for (when, _address) in self._plannned_connections
+                      if _address != address]
 
     ##########################################################
 
@@ -144,6 +145,7 @@ class Link(object):
         Thread-safe.
         Adds listener to the pool. This method is not blocking. Run only once.
         """
+        address = socket.gethostbyname(address[0]), address[1]
         with self.lock:
             if address in self._listen_socks:
                 raise ValueError("listener %r already set" % address)
@@ -340,7 +342,11 @@ class Link(object):
     ##########################################################
 
     def handle_accept(self, sock):
-        newsock, address = sock.accept()
+        try:
+            newsock, address = sock.accept()
+        except socket.error, exc:
+            self.log.error("accept %r: %r" % (sock, exc))
+            return
         newsock.setblocking(0)
         self._sock_by_fd[newsock.fileno()] = newsock
         self.poller.register(newsock, select.POLLIN)
@@ -352,22 +358,33 @@ class Link(object):
     ##########################################################
 
     def handle_recv(self, sock):
-        try:
-            data = sock.recv(RECV_BLOCK_SIZE)
-        except socket.error, exc:
-            err = exc.args[0]
-            if err in (errno.ECONNRESET, errno.ENOTCONN, errno.ESHUTDOWN,
-                        errno.ECONNABORTED, errno.EPIPE, errno.EBADF):
-                self.handle_close(sock)
-                return
-            else:
-                raise
+        buf = []
+        do_close = False
+        while True:
+            try:
+                fragment = sock.recv(RECV_BLOCK_SIZE)
+                if not fragment:
+                    do_close = True
+                    break
+                buf.append(fragment)
+            except socket.error, exc:
+                err = exc.args[0]
+                if err == errno.EWOULDBLOCK:
+                    break
+                elif err in (errno.ECONNRESET, errno.ENOTCONN, errno.ESHUTDOWN,
+                            errno.ECONNABORTED, errno.EPIPE, errno.EBADF):
+                    do_close = True
+                    break
+                else:
+                    raise
 
-        if data:
+        if buf:
+            buf = "".join(buf)
             conn_id = self._conn_by_sock[sock]
-            self.log.debug("recv %s len=%i" % (conn_id, len(data)))
-            self.on_recv(conn_id, data)
-        else:
+            self.log.debug("recv %s len=%i" % (conn_id, len(buf)))
+            self.on_recv(conn_id, buf)
+        
+        if do_close:
             self.handle_close(sock)
 
     ##########################################################

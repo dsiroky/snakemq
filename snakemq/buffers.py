@@ -14,7 +14,7 @@ MAX_BUF_CHUNK_SIZE = 64 * 1024
 ############################################################################
 
 class StreamBuffer(object):
-    # TODO add size limit
+    # TODO add size limit + hysteresis to avoid often signalling
 
     def __init__(self):
         self.queue = deque()
