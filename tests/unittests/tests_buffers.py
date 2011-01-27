@@ -1,10 +1,13 @@
 #! -*- coding: utf-8 -*-
 
-import unittest
+import threading
+import time
 
 import snakemq.buffers
 
-class TestBuffers(unittest.TestCase):
+import utils
+
+class TestBuffers(utils.TestCase):
     def setUp(self):
         self.buf = snakemq.buffers.StreamBuffer()
 
@@ -70,3 +73,27 @@ class TestBuffers(unittest.TestCase):
         self.buf.cut(3)
         self.assertEqual(len(self.buf), 0)
         
+############################################################################
+############################################################################
+
+class TestBuffersMaxSize(utils.TestCase):
+    def setUp(self):
+        self.buf = snakemq.buffers.StreamBuffer()
+        self.buf.set_max_size(100)
+
+    def tearDown(self):
+        del self.buf
+
+    ##########################################################
+
+    def test_simple(self):
+        self.buf.put("a" * self.buf.max_size, 0.01) # no block
+        self.buf.clear()
+
+        self.assertRaises(snakemq.buffers.BufferTooLarge,
+                self.buf.put, "a" * (self.buf.max_size + 1), 0.01)
+
+        self.buf.put("a" * (self.buf.max_size / 2), 0.01)
+        self.assertRaises(snakemq.buffers.BufferTimeout,
+                self.buf.put, "a" * (self.buf.max_size / 2 + 2), 0.01)
+

@@ -34,7 +34,7 @@ def _empty_func(*args, **kwargs):
 class Link(object):
     """
     Just a bare wire stream communication. Keeper of opened (TCP) connections.
-    NOT thread-safe except L{C{Link.send()}}.
+    NOT thread-safe except C{L{Link.send()}}.
 
     @ivar on_connect: C{func(conn_id)}
     @ivar on_disconnect: C{func(conn_id)}
@@ -47,6 +47,7 @@ class Link(object):
         self.log = logging.getLogger("snakemq.link")
 
         # callbacks
+        # TODO make then properties with warning of overwriting (maybe set+reset)
         self.on_connect = _empty_func
         self.on_disconnect = _empty_func
         self.on_recv = _empty_func
@@ -65,11 +66,13 @@ class Link(object):
         self._listen_socks = {} # address:sock
         self._listen_socks_filenos = set()
 
+        self._connectors = set()
         self._socks_connectors = {} # sock:address
         self._socks_waiting_to_connect = set()
         self._plannned_connections = [] # (when, address)
         self._reconnect_intervals = {} # address:interval
 
+        # TODO replace RLock with much faster Lock (code must be altered)
         self.lock = threading.RLock()
     
     ##########################################################
@@ -88,7 +91,7 @@ class Link(object):
         self.quit(blocking=True)
 
         with self.lock:
-            for address in self._reconnect_intervals.keys():
+            for address in list(self._connectors):
                 self.del_connector(address)
 
             for address in self._listen_socks.keys():
@@ -103,6 +106,7 @@ class Link(object):
         assert len(self._sock_by_conn) == 0
         assert len(self._listen_socks) == 0
         assert len(self._listen_socks_filenos) == 0
+        assert len(self._connectors) == 0
         assert len(self._socks_connectors) == 0
         assert len(self._socks_waiting_to_connect) == 0
         assert len(self._plannned_connections) == 0
@@ -121,6 +125,9 @@ class Link(object):
         assert isinstance(reconnect_interval, (int, float))
         address = socket.gethostbyname(address[0]), address[1]
         with self.lock:
+            if address in self._connectors:
+                raise ValueError("connector '%r' already set", address)
+            self._connectors.add(address)
             self._reconnect_intervals[address] = reconnect_interval
             self.plan_connect(0, address) # connect ASAP
 
@@ -131,6 +138,7 @@ class Link(object):
         Thread-safe.
         """
         with self.lock:
+            self._connectors.remove(address)
             del self._reconnect_intervals[address]
             # filter out address from plan
             self._plannned_connections = \
@@ -148,8 +156,7 @@ class Link(object):
         address = socket.gethostbyname(address[0]), address[1]
         with self.lock:
             if address in self._listen_socks:
-                raise ValueError("listener %r already set" % address)
-
+                raise ValueError("listener '%r' already set" % address)
             listen_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             fileno = listen_sock.fileno()
             listen_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -266,7 +273,7 @@ class Link(object):
         """
         Interrupt the loop. It doesn't perform a cleanup.
         @param blocking: True = wait for the loop to exit, use True only
-                          in a different thread other then the loop thread.
+                          B{in a different thread} other then the loop thread.
         """
         if blocking:
             with self._quit_signal:
@@ -282,15 +289,15 @@ class Link(object):
     def new_connection_id(self, sock):
         """
         Create a virtual connection ID. This ID will be passed to C{on_*}
-        functions. It is a unique identifier for every new connection.
+        functions. It is a unique identifier for every new connection during
+        the instance's existence.
         """
         # NOTE E.g. pair address+port can't be used as a connection identifier
         # because it is not unique enough. It might be the same for 2 connections
         # distinct in time.
 
         self._new_conn_id += 1
-        conn_id = "%X_%f_%i_%i" % (id(self), time.time(), self._new_conn_id,
-                                sock.fileno())
+        conn_id = "%ifd%i" % (self._new_conn_id, sock.fileno())
         self._conn_by_sock[sock] = conn_id
         self._sock_by_conn[conn_id] = sock
         return conn_id
@@ -413,8 +420,9 @@ class Link(object):
 
         if sock in self._socks_connectors:
             address = self._socks_connectors.pop(sock)
-            self.plan_connect(time.time() + self._reconnect_intervals[address],
-                              address)
+            interval = self._reconnect_intervals.get(address)
+            if interval:
+                self.plan_connect(time.time() + interval, address)
 
     ##########################################################
 

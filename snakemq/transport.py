@@ -1,14 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-Packet format: [4B size|payload], size is bytes number of all following
-the the first 4 bytes including the type byte.
+Packet format: [4B size|payload], size is bytes count (in network order) of
+all following packet data.
 
 @author: David Siroky (siroky@dasir.cz)
 """
+# TODO example or test for 2 links - send large data - sending should be interleaved
 
 import logging
 import struct
 import socket
+from collections import deque
 
 from snakemq.buffers import StreamBuffer
 from snakemq.exceptions import SnakeMQUnknownConnectionID, SnakeMQBadPacket
@@ -93,12 +95,9 @@ class ConnectionInfo(object):
 
 class Transport(object):
     """
-    Packets between nodes. Data of unfinished packet reception will be dropped.
-
-    @ivar on_connect: C{func(conn_id)}
-    @ivar on_disconnect: C{func(conn_id)}
-    @ivar on_packet_recv: C{func(conn_id, packet)}
-    @ivar on_error: C{func(conn_id, exception)}
+    Packets transport between nodes. Data of unfinished packet reception
+    (closed connection) will be dropped. Packets over a single connection are
+    serialized one by one.
     """
 
     def __init__(self, link):
@@ -106,12 +105,15 @@ class Transport(object):
         self.log = logging.getLogger("snakemq.transport")
 
         # callbacks
-        self.on_connect = _empty_func
-        self.on_disconnect = _empty_func
-        self.on_packet_recv = _empty_func
-        self.on_error = _empty_func
+        self.on_connect = _empty_func #: C{func(conn_id)}
+        self.on_disconnect = _empty_func #: C{func(conn_id)}
+        self.on_packet_recv = _empty_func #: C{func(conn_id, packet)}
+        #: C{func(conn_id)}, just a signal when a packet was fully sent
+        self.on_packet_sent = _empty_func
+        self.on_error = _empty_func #: C{func(conn_id, exception)}
 
         self._connections = {} # conn_id:ConnectionInfo
+        self._queued_packets_sizes = deque()
 
         self.link.on_connect = self._on_connect
         self.link.on_disconnect = self._on_disconnect
@@ -131,7 +133,9 @@ class Transport(object):
                 conn = self._connections[conn_id]
             except KeyError:
                 raise SnakeMQUnknownConnectionID(conn_id)
-            conn.send_buffer.put(size_to_bin(len(buf)) + buf)
+            buf = size_to_bin(len(buf)) + buf
+            conn.send_buffer.put(buf)
+            self._queued_packets_sizes.append(len(buf))
             self._on_ready_to_send(conn_id)
 
     ###########################################################
@@ -171,4 +175,10 @@ class Transport(object):
         if buf:
             sent_length = self.link.send(conn_id, buf)
             conn.send_buffer.cut(sent_length)
-
+            while sent_length > 0:
+                first = self._queued_packets_sizes.popleft()
+                if first <= sent_length:
+                    self.on_packet_sent(conn_id)
+                else:
+                    self._queued_packets_sizes.appendleft(first - sent_length)
+                sent_length -= first

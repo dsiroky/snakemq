@@ -1,15 +1,14 @@
 #! -*- coding: utf-8 -*-
 
-import unittest
 import threading
-import time
-import hashlib
 
 import snakemq.link
 
+import utils
+
 TEST_PORT = 40000
 
-class TestLink(unittest.TestCase):
+class TestLink(utils.TestCase):
     def run_srv_cli(self, server, client):
         link_server = snakemq.link.Link()
         link_server.add_listener(("", TEST_PORT))

@@ -14,3 +14,9 @@ class SnakeMQBadPacket(SnakeMQException):
     Received packet has wrong structure.
     """
     pass
+
+class SnakeMQUnknownRoute(SnakeMQException):
+    """
+    Message destination/route unknown.
+    """
+    pass
