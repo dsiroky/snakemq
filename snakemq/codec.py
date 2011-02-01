@@ -7,7 +7,6 @@ Packet serialization
 
 import types
 import struct
-import socket
 
 from snakemq.exceptions import SnakeMQBadPacket
 
@@ -18,7 +17,8 @@ BER_TYPE_INTEGER = 2
 BER_TYPE_OCTET_STRING = 4
 BER_TYPE_SEQUENCE = 16 | 0b100000
 
-SIZEOF_INT = struct.calcsize("I")
+INT_FORMAT = "!I" # netword order 32-bit unsigned integer
+SIZEOF_INT = struct.calcsize(INT_FORMAT)
 
 ##########################################################################
 ##########################################################################
@@ -45,7 +45,7 @@ class BerCodec(BaseCodec):
     @staticmethod
     def _gen_length(value):
         value_length = len(value)
-        length = struct.pack("I", socket.htonl(value_length)).lstrip("\0")
+        length = struct.pack(INT_FORMAT, value_length).lstrip("\0")
         if value_length <= 0x80:
             return length
         else:
@@ -69,7 +69,7 @@ class BerCodec(BaseCodec):
                 
             bin_length = ("\0" * (SIZEOF_INT - l_of_l) + # pad missing zeroes
                         value[2:2 + l_of_l])
-            length = socket.ntohl(struct.unpack("I", bin_length)[0]) 
+            length = struct.unpack(INT_FORMAT, bin_length)[0] 
         else:
             length = first
             l_of_l = 0
@@ -88,7 +88,7 @@ class BerCodec(BaseCodec):
         """
         if isinstance(value, types.IntType):
             assert value >= 0
-            value = struct.pack("I", socket.htonl(value))
+            value = struct.pack(INT_FORMAT, value)
             return chr(BER_TYPE_INTEGER) + BerCodec._gen_length(value) + value
         elif isinstance(value, types.StringTypes):
             return chr(BER_TYPE_OCTET_STRING) + BerCodec._gen_length(value) + value
@@ -113,7 +113,7 @@ class BerCodec(BaseCodec):
         value = value[data_start:]
 
         if value_type == BER_TYPE_INTEGER:
-            data = socket.ntohl(struct.unpack("I", value[:length])[0])
+            data = struct.unpack(INT_FORMAT, value[:length])[0]
         elif value_type == BER_TYPE_OCTET_STRING:
             data = value[:length]
         elif value_type == BER_TYPE_SEQUENCE:

@@ -9,7 +9,6 @@ all following packet data.
 
 import logging
 import struct
-import socket
 from collections import deque
 
 from snakemq.buffers import StreamBuffer
@@ -20,7 +19,8 @@ from snakemq.exceptions import SnakeMQUnknownConnectionID, SnakeMQBadPacket
 
 SEND_BLOCK_SIZE = 16 * 1024
 
-SIZEOF_BIN_SIZE = struct.calcsize("I")
+BIN_SIZE_FORMAT = "!I" # network order 32-bit unsigned integer
+SIZEOF_BIN_SIZE = struct.calcsize(BIN_SIZE_FORMAT)
 
 ############################################################################
 ############################################################################
@@ -36,12 +36,12 @@ def _empty_func(*args, **kwargs):
 def size_to_bin(size):
     # make the size a signed integer - negative integers might be
     # reserved for future extensions
-    return struct.pack("I", socket.htonl(size))
+    return struct.pack(BIN_SIZE_FORMAT, size)
 
 #################################################################
 
 def bin_to_size(buf):
-    return socket.ntohl(struct.unpack("I", buf)[0])
+    return struct.unpack(BIN_SIZE_FORMAT, buf)[0]
 
 ############################################################################
 ############################################################################
