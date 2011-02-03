@@ -9,7 +9,7 @@ sys.path.insert(0, "../..")
 
 import snakemq
 import snakemq.link
-import snakemq.transport
+import snakemq.packeter
 
 ###########################################################################
 
@@ -30,7 +30,7 @@ def srv(container):
         s.quit(blocking=False)
 
     s.add_listener(("", PORT))
-    tr = snakemq.transport.Transport(s)
+    tr = snakemq.packeter.Packeter(s)
     tr.on_packet_recv = on_packet_recv
     tr.on_disconnect = on_disconnect
     s.loop()
@@ -49,7 +49,7 @@ def cli(container):
         s.quit(blocking=False)
 
     s.add_connector(("localhost", PORT))
-    tr = snakemq.transport.Transport(s)
+    tr = snakemq.packeter.Packeter(s)
     tr.on_connect = on_connect
     tr.on_packet_sent = on_packet_sent
     s.loop()

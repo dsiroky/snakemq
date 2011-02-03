@@ -9,7 +9,7 @@ sys.path.insert(0, "../..")
 import snakemq
 
 from tests_link import *
-from tests_transport import *
+from tests_packeter import *
 from tests_buffers import *
 
 if __name__ == "__main__":

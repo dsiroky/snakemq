@@ -93,7 +93,7 @@ class ConnectionInfo(object):
 ############################################################################
 ############################################################################
 
-class Transport(object):
+class Packeter(object):
     """
     Packets transport between nodes. Data of unfinished packet reception
     (closed connection) will be dropped. Packets over a single connection are
