@@ -36,7 +36,7 @@ class TestLink(utils.TestCase):
             def on_recv(conn_id, data):
                 container["received"].append(data)
             def on_disconnect(conn_id):
-                link.quit(blocking=False)
+                link.quit()
 
             link.on_recv = on_recv
             link.on_disconnect = on_disconnect
@@ -48,7 +48,7 @@ class TestLink(utils.TestCase):
                 size = link.send(conn_id, data)
                 container["sent"] = data[:size]
                 link.close(conn_id)
-                link.quit(blocking=False)
+                link.quit()
 
             link.on_connect = on_connect
             link.loop(runtime=0.5)

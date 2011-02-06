@@ -1,9 +1,10 @@
 #!/usr/bin/python
 
-import threading
 import time
 import logging
 import sys
+import cProfile as profile
+from multiprocessing import Process
 
 sys.path.insert(0, "../..")
 
@@ -13,45 +14,58 @@ import snakemq.packeter
 
 ###########################################################################
 
-DATA_SIZE = 300 * 1024 * 1024
+DATA_SIZE = 5
+COUNT = 100000
 PORT = 4000
 
 ###########################################################################
 
-def srv(container):
+def srv():
     s = snakemq.link.Link()
+    container = {"start_time": None, "count": 0}
+
+    def on_connect(conn_id):
+        container["start_time"] = time.time()
 
     def on_packet_recv(self, packet):
         assert len(packet) == DATA_SIZE
-        diff = time.time() - container["start_time"]
-        print "flow: %.02f MBps" % (DATA_SIZE / diff / 1024**2)
+        container["count"] += 1
 
     def on_disconnect(conn_id):
-        s.quit(blocking=False)
+        diff = time.time() - container["start_time"]
+        print "flow: %.02f MBps, %i pkts/s" % (DATA_SIZE * COUNT / diff / 1024**2,
+                    COUNT / diff)
+        s.stop()
 
     s.add_listener(("", PORT))
     tr = snakemq.packeter.Packeter(s)
+    tr.on_connect = on_connect
     tr.on_packet_recv = on_packet_recv
     tr.on_disconnect = on_disconnect
     s.loop()
     s.cleanup()
+    assert container["count"] == COUNT
 
 ###########################################################################
 
-def cli(container):
+def cli():
     s = snakemq.link.Link()
+    container = {"count": 0}
 
     def on_connect(conn_id):
-        container["start_time"] = time.time()
-        tr.send_packet(conn_id, "x" * DATA_SIZE)
+        for i in xrange(COUNT):
+            tr.send_packet(conn_id, "x" * DATA_SIZE)
 
-    def on_packet_sent(conn_id):
-        s.quit(blocking=False)
+    def on_packet_sent(conn_id, packet_id):
+        container["count"] += 1
+        if container["count"] == COUNT:
+            s.stop()
 
     s.add_connector(("localhost", PORT))
     tr = snakemq.packeter.Packeter(s)
     tr.on_connect = on_connect
     tr.on_packet_sent = on_packet_sent
+    #profile.runctx("s.loop()", globals(), locals(), "/tmp/prof_cli.dat")
     s.loop()
     s.cleanup()
 
@@ -63,11 +77,9 @@ snakemq.init()
 logger = logging.getLogger("snakemq")
 logger.setLevel(logging.ERROR)
 
-container = {"start_time": None}
-
-thr_srv = threading.Thread(target=srv, args=[container])
+thr_srv = Process(target=srv)
 thr_srv.start()
-thr_cli = threading.Thread(target=cli, args=[container])
+thr_cli = Process(target=cli)
 thr_cli.start()
 thr_srv.join()
 thr_cli.join()

@@ -6,6 +6,7 @@ all following packet data.
 @author: David Siroky (siroky@dasir.cz)
 """
 # TODO example or test for 2 links - send large data - sending should be interleaved
+# TODO id for packets
 
 import logging
 import struct
@@ -25,14 +26,6 @@ SIZEOF_BIN_SIZE = struct.calcsize(BIN_SIZE_FORMAT)
 ############################################################################
 ############################################################################
 
-def _empty_func(*args, **kwargs):
-    """
-    Sink.
-    """
-    pass
-
-#################################################################
-
 def size_to_bin(size):
     # make the size a signed integer - negative integers might be
     # reserved for future extensions
@@ -49,17 +42,14 @@ def bin_to_size(buf):
 class ReceiveBuffer(StreamBuffer):
     def __init__(self):
         StreamBuffer.__init__(self)
-        self.packet_size = None # packet size by its header
+        self.packet_size = None # cache for packet size by its header
   
     ############################################################
 
-    def put(self, buf):
+    def get_packets(self):
         """
-        Add data to the buffer.
         @return: list of fully received packets
         """
-        StreamBuffer.put(self, buf)
-
         packets = []
         while self.size:
             if self.packet_size is None:
@@ -102,18 +92,19 @@ class Packeter(object):
 
     def __init__(self, link):
         self.link = link
-        self.log = logging.getLogger("snakemq.transport")
+        self.log = logging.getLogger("snakemq.packeter")
 
         # callbacks
-        self.on_connect = _empty_func #: C{func(conn_id)}
-        self.on_disconnect = _empty_func #: C{func(conn_id)}
-        self.on_packet_recv = _empty_func #: C{func(conn_id, packet)}
-        #: C{func(conn_id)}, just a signal when a packet was fully sent
-        self.on_packet_sent = _empty_func
-        self.on_error = _empty_func #: C{func(conn_id, exception)}
+        self.on_connect = None #: C{func(conn_id)}
+        self.on_disconnect = None #: C{func(conn_id)}
+        self.on_packet_recv = None #: C{func(conn_id, packet)}
+        #: C{func(conn_id, packet_id)}, just a signal when a packet was fully sent
+        self.on_packet_sent = None
+        self.on_error = None #: C{func(conn_id, exception)}
 
         self._connections = {} # conn_id:ConnectionInfo
-        self._queued_packets_sizes = deque()
+        self._queued_packets = deque()
+        self._last_packet_id = 0
 
         self.link.on_connect = self._on_connect
         self.link.on_disconnect = self._on_disconnect
@@ -127,45 +118,57 @@ class Packeter(object):
         """
         Thread-safe.
         Queue data to be sent over the link.
+        @return: packet id
         """
-        with self.link.lock:
-            try:
-                conn = self._connections[conn_id]
-            except KeyError:
-                raise SnakeMQUnknownConnectionID(conn_id)
-            buf = size_to_bin(len(buf)) + buf
-            conn.send_buffer.put(buf)
-            self._queued_packets_sizes.append(len(buf))
-            self._on_ready_to_send(conn_id)
+        try:
+            conn = self._connections[conn_id]
+        except KeyError:
+            raise SnakeMQUnknownConnectionID(conn_id)
+
+        self._last_packet_id += 1
+        packet_id = self._last_packet_id
+
+        buf = size_to_bin(len(buf)) + buf
+        conn.send_buffer.put(buf)
+        self._queued_packets.append((len(buf), packet_id))
+        self._on_ready_to_send(conn_id)
+
+        return packet_id
 
     ###########################################################
     ###########################################################
 
     def _on_connect(self, conn_id):
         self._connections[conn_id] = ConnectionInfo()
-        self.on_connect(conn_id)
+        if self.on_connect:
+            self.on_connect(conn_id)
 
     ###########################################################
 
     def _on_disconnect(self, conn_id):
         # TODO signal unsent data and unreceived data
         del self._connections[conn_id]
-        self.on_disconnect(conn_id)
+        if self.on_disconnect:
+            self.on_disconnect(conn_id)
 
     ###########################################################
 
     def _on_recv(self, conn_id, buf):
+        recv_buffer = self._connections[conn_id].recv_buffer
+        recv_buffer.put(buf)
         try:
-            packets = self._connections[conn_id].recv_buffer.put(buf)
+            packets = recv_buffer.get_packets()
         except SnakeMQBadPacket, exc:
             self.log.error("conn=%s %r" % (conn_id, exc))
-            self.on_error(conn_id, exc)
+            if self.on_error:
+                self.on_error(conn_id, exc)
             self.link.close(conn_id)
             return
 
         for packet in packets:
             self.log.debug("recv packet %s len=%i" % (conn_id, len(packet)))
-            self.on_packet_recv(conn_id, packet)
+            if self.on_packet_recv:
+                self.on_packet_recv(conn_id, packet)
 
     ###########################################################
 
@@ -176,9 +179,11 @@ class Packeter(object):
             sent_length = self.link.send(conn_id, buf)
             conn.send_buffer.cut(sent_length)
             while sent_length > 0:
-                first = self._queued_packets_sizes.popleft()
+                first, packet_id = self._queued_packets.popleft()
                 if first <= sent_length:
-                    self.on_packet_sent(conn_id)
+                    if self.on_packet_sent:
+                        self.on_packet_sent(conn_id, None)
                 else:
-                    self._queued_packets_sizes.appendleft(first - sent_length)
+                    self._queued_packets.appendleft((first - sent_length,
+                                                    packet_id))
                 sent_length -= first

@@ -9,7 +9,6 @@ import sys
 import errno
 import time
 import bisect
-import threading
 import logging
 
 from snakemq.exceptions import SnakeMQUnknownConnectionID
@@ -18,15 +17,7 @@ from snakemq.exceptions import SnakeMQUnknownConnectionID
 ############################################################################
 
 RECV_BLOCK_SIZE = 128 * 1024
-
-############################################################################
-############################################################################
-
-def _empty_func(*args, **kwargs):
-    """
-    Sink.
-    """
-    pass
+RECONNECT_INTERVAL = 1.0
 
 ############################################################################
 ############################################################################
@@ -34,12 +25,7 @@ def _empty_func(*args, **kwargs):
 class Link(object):
     """
     Just a bare wire stream communication. Keeper of opened (TCP) connections.
-    NOT thread-safe except C{L{Link.send()}}.
-
-    @ivar on_connect: C{func(conn_id)}
-    @ivar on_disconnect: C{func(conn_id)}
-    @ivar on_recv: C{func(conn_id, data)}
-    @ivar on_ready_to_send: C{func(conn_id)}, previous send was successful
+    NOT thread-safe.
     """
 
     def __init__(self):
@@ -47,15 +33,13 @@ class Link(object):
         self.log = logging.getLogger("snakemq.link")
 
         # callbacks
-        # TODO make then properties with warning of overwriting (maybe set+reset)
-        self.on_connect = _empty_func
-        self.on_disconnect = _empty_func
-        self.on_recv = _empty_func
-        self.on_ready_to_send = _empty_func
-        self.on_loop_iteration = _empty_func
+        self.on_connect = None #: C{func(conn_id)}
+        self.on_disconnect = None #: C{func(conn_id)}
+        self.on_recv = None #: C{func(conn_id, data)}
+        self.on_ready_to_send = None #: C{func(conn_id)}, last send was successful
+        self.on_loop_iteration = None #: C{func()}
         
         self._do_loop = False # False breaks the loop
-        self._quit_signal = threading.Condition()
 
         self._new_conn_id = 0 # counter for conn id generator
 
@@ -72,9 +56,6 @@ class Link(object):
         self._plannned_connections = [] # (when, address)
         self._reconnect_intervals = {} # address:interval
 
-        # TODO replace RLock with much faster Lock (code must be altered)
-        self.lock = threading.RLock()
-    
     ##########################################################
 
     def __del__(self):
@@ -84,21 +65,18 @@ class Link(object):
 
     def cleanup(self):
         """
-        Thread-safe.
-        Quits running loop, closes all sockets and removes
-        all connectors and listeners.
+        Close all sockets and remove all connectors and listeners.
         """
-        self.quit(blocking=True)
+        assert not self._do_loop
 
-        with self.lock:
-            for address in list(self._connectors):
-                self.del_connector(address)
+        for address in list(self._connectors):
+            self.del_connector(address)
 
-            for address in self._listen_socks.keys():
-                self.del_listener(address)
+        for address in self._listen_socks.keys():
+            self.del_listener(address)
 
-            for sock in self._sock_by_fd.values():
-                self.handle_close(sock)
+        for sock in self._sock_by_fd.values():
+            self.handle_close(sock)
 
         # be sure that no memory is wasted
         assert len(self._sock_by_fd) == 0
@@ -114,9 +92,8 @@ class Link(object):
         
     ##########################################################
 
-    def add_connector(self, address, reconnect_interval=1.0):
+    def add_connector(self, address, reconnect_interval=RECONNECT_INTERVAL):
         """
-        Thread-safe.
         This will not create an immediate connection. It just adds a connector
         to the pool.
         @param address: remote address
@@ -124,70 +101,58 @@ class Link(object):
         """
         assert isinstance(reconnect_interval, (int, float))
         address = socket.gethostbyname(address[0]), address[1]
-        with self.lock:
-            if address in self._connectors:
-                raise ValueError("connector '%r' already set", address)
-            self._connectors.add(address)
-            self._reconnect_intervals[address] = reconnect_interval
-            self.plan_connect(0, address) # connect ASAP
+        if address in self._connectors:
+            raise ValueError("connector '%r' already set", address)
+        self._connectors.add(address)
+        self._reconnect_intervals[address] = reconnect_interval
+        self.plan_connect(0, address) # connect ASAP
 
     ##########################################################
 
     def del_connector(self, address):
-        """
-        Thread-safe.
-        """
-        with self.lock:
-            self._connectors.remove(address)
-            del self._reconnect_intervals[address]
-            # filter out address from plan
-            self._plannned_connections = \
-                [(when, _address)
-                      for (when, _address) in self._plannned_connections
-                      if _address != address]
+        self._connectors.remove(address)
+        del self._reconnect_intervals[address]
+        # filter out address from plan
+        self._plannned_connections = \
+            [(when, _address)
+                  for (when, _address) in self._plannned_connections
+                  if _address != address]
 
     ##########################################################
 
     def add_listener(self, address):
         """
-        Thread-safe.
         Adds listener to the pool. This method is not blocking. Run only once.
         """
         address = socket.gethostbyname(address[0]), address[1]
-        with self.lock:
-            if address in self._listen_socks:
-                raise ValueError("listener '%r' already set" % address)
-            listen_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            fileno = listen_sock.fileno()
-            listen_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            listen_sock.setblocking(0)
+        if address in self._listen_socks:
+            raise ValueError("listener '%r' already set" % address)
+        listen_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        fileno = listen_sock.fileno()
+        listen_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        listen_sock.setblocking(0)
 
-            self._sock_by_fd[fileno] = listen_sock
-            self._listen_socks[address] = listen_sock
-            self._listen_socks_filenos.add(fileno)
+        self._sock_by_fd[fileno] = listen_sock
+        self._listen_socks[address] = listen_sock
+        self._listen_socks_filenos.add(fileno)
 
-            listen_sock.bind(address)
-            listen_sock.listen(5)
-            self.poller.register(listen_sock, select.POLLIN)
+        listen_sock.bind(address)
+        listen_sock.listen(5)
+        self.poller.register(listen_sock, select.POLLIN)
 
     ##########################################################
 
     def del_listener(self, address):
-        """
-        Thread-safe.
-        """
-        with self.lock:
-            sock = self._listen_socks.pop(address)
-            fileno = sock.fileno()
-            self._listen_socks_filenos.remove(fileno)
-            del self._sock_by_fd[fileno]
-            sock.close()
+        sock = self._listen_socks.pop(address)
+        fileno = sock.fileno()
+        self._listen_socks_filenos.remove(fileno)
+        del self._sock_by_fd[fileno]
+        sock.close()
 
     ##########################################################
 
     def send(self, conn_id, data):
         """
-        Thread-safe.
         WARNING: this operation is non-blocking and if the remote side closes
         the connection then this call will be successful but the data will
         be lost. Always wait for C{Link.on_ready_to_send} to have confirmation
@@ -195,23 +160,22 @@ class Link(object):
 
         @return: number of bytes sent
         """
-        with self.lock:
-            sock = self.get_socket(conn_id)
-            try:
-                sent_length = sock.send(data)
-            except socket.error, exc:
-                err = exc.args[0]
-                if err == errno.EWOULDBLOCK:
-                    return 0
-                elif err in (errno.ECONNRESET, errno.ENOTCONN, errno.ESHUTDOWN,
-                            errno.ECONNABORTED, errno.EPIPE, errno.EBADF):
-                    self.handle_close(sock)
-                    return 0
-                else:
-                    raise
+        sock = self.get_socket(conn_id)
+        try:
+            sent_length = sock.send(data)
+        except socket.error, exc:
+            err = exc.args[0]
+            if err == errno.EWOULDBLOCK:
+                return 0
+            elif err in (errno.ECONNRESET, errno.ENOTCONN, errno.ESHUTDOWN,
+                        errno.ECONNABORTED, errno.EPIPE, errno.EBADF):
+                self.handle_close(sock)
+                return 0
+            else:
+                raise
 
-            self.poller.modify(sock, select.POLLIN | select.POLLOUT)
-            return sent_length
+        self.poller.modify(sock, select.POLLIN | select.POLLOUT)
+        return sent_length
 
     ##########################################################
 
@@ -227,15 +191,11 @@ class Link(object):
     ##########################################################
 
     def close(self, conn_id):
-        """
-        Thread-safe.
-        """
-        with self.lock:
-            self.handle_close(self.get_socket(conn_id))
+        self.handle_close(self.get_socket(conn_id))
 
     ##########################################################
 
-    def loop(self, poll_timeout=0.2, count=None, runtime=None):
+    def loop(self, poll_timeout=0.1, count=None, runtime=None):
         """
         Start the communication loop.
         @param poll_timeout: in seconds, should be less then the minimal
@@ -246,12 +206,10 @@ class Link(object):
         """
         poll_timeout *= 1000
 
-        with self._quit_signal:
-            self._do_loop = True
+        self._do_loop = True
 
         # plan fresh connects
-        with self.lock:
-            self.deal_connects()
+        self.deal_connects()
 
         time_start = time.time()
         while (self._do_loop and
@@ -259,29 +217,20 @@ class Link(object):
                 not ((runtime is not None) and
                       (time.time() - time_start > runtime))):
             is_event = self.loop_iteration(poll_timeout)
-            self.on_loop_iteration()
+            if self.on_loop_iteration:
+                self.on_loop_iteration()
             if is_event and (count is not None):
                 count -= 1
 
-        with self._quit_signal:
-            self._do_loop = False
-            self._quit_signal.notify()
+        self._do_loop = False
 
     ##########################################################
 
-    def quit(self, blocking=True):
+    def stop(self):
         """
         Interrupt the loop. It doesn't perform a cleanup.
-        @param blocking: True = wait for the loop to exit, use True only
-                          B{in a different thread} other then the loop thread.
         """
-        if blocking:
-            with self._quit_signal:
-                if self._do_loop:
-                    self._do_loop = False
-                    self._quit_signal.wait()
-        else:
-            self._do_loop = False
+        self._do_loop = False
 
     ##########################################################
     ##########################################################
@@ -292,7 +241,7 @@ class Link(object):
         functions. It is a unique identifier for every new connection during
         the instance's existence.
         """
-        # NOTE E.g. pair address+port can't be used as a connection identifier
+        # NOTE e.g. pair address+port can't be used as a connection identifier
         # because it is not unique enough. It might be the same for 2 connections
         # distinct in time.
 
@@ -344,7 +293,8 @@ class Link(object):
 
         conn_id = self.new_connection_id(sock)
         self.log.info("connect %s %r" % (conn_id, sock.getpeername()))
-        self.on_connect(conn_id)
+        if self.on_connect:
+            self.on_connect(conn_id)
 
     ##########################################################
 
@@ -360,7 +310,8 @@ class Link(object):
 
         conn_id = self.new_connection_id(newsock)
         self.log.info("accept %s %r" % (conn_id, address))
-        self.on_connect(conn_id)
+        if self.on_connect:
+            self.on_connect(conn_id)
 
     ##########################################################
 
@@ -389,7 +340,8 @@ class Link(object):
             buf = "".join(buf)
             conn_id = self._conn_by_sock[sock]
             self.log.debug("recv %s len=%i" % (conn_id, len(buf)))
-            self.on_recv(conn_id, buf)
+            if self.on_recv:
+                self.on_recv(conn_id, buf)
         
         if do_close:
             self.handle_close(sock)
@@ -416,7 +368,8 @@ class Link(object):
             conn_id = self._conn_by_sock[sock]
             self.del_connection_id(sock)
             self.log.info("disconnect %s " % conn_id)
-            self.on_disconnect(conn_id)
+            if self.on_disconnect:
+                self.on_disconnect(conn_id)
 
         if sock in self._socks_connectors:
             address = self._socks_connectors.pop(sock)
@@ -430,7 +383,8 @@ class Link(object):
         self.poller.modify(sock, select.POLLIN)
         conn_id = self._conn_by_sock[sock]
         self.log.debug("ready to send " + conn_id)
-        self.on_ready_to_send(conn_id)
+        if self.on_ready_to_send:
+            self.on_ready_to_send(conn_id)
 
     ##########################################################
 
@@ -465,10 +419,9 @@ class Link(object):
         @return: number of sockets with performed operations
         """
         fds = self.poller.poll(poll_timeout)
-        with self.lock:
-            for fd, mask in fds:
-                self.handle_fd_mask(fd, mask)
-            self.deal_connects()
+        for fd, mask in fds:
+            self.handle_fd_mask(fd, mask)
+        self.deal_connects()
         return len(fds)
 
     ##########################################################

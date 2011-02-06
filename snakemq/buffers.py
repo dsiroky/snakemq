@@ -21,6 +21,9 @@ class BufferTimeout(BufferException):
     pass
 
 class BufferTooLarge(BufferException):
+    """
+    Raised when you want to put larger piece then the buffer max size.
+    """
     pass
 
 ############################################################################
@@ -31,8 +34,7 @@ class StreamBuffer(object):
         self.size = 0 # current size of the buffer
         self.max_size = None
         self.queue = deque()
-        self.lock = threading.Lock()
-        self.not_full_cond = threading.Condition(self.lock)
+        self.not_full_cond = threading.Condition()
 
     ############################################################
 
@@ -93,7 +95,7 @@ class StreamBuffer(object):
 
     ############################################################
 
-    def get(self, size, cut):
+    def get(self, size, cut=True):
         """
         Get from the left side.
         @param cut: True = remove returned data from buffer

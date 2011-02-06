@@ -21,36 +21,33 @@ MESSAGE_TYPE_SIGNAL = 0 #: deliver only if connected
 MESSAGE_TYPE_TRANSIENT = 1 #: drop on process end (queue to memory if needed)
 MESSAGE_TYPE_PERSISTENT = 2 #: deliver at all cost (queue to disk if needed)
 
-############################################################################
-############################################################################
-
-def _empty(*args, **kwargs):
-    """
-    Sink.
-    """
-    pass
-
 #############################################################################
 #############################################################################
 
 class Messaging(object):
-    def __init__(self, identifier, transport, codec=snakemq.codec.BerCodec()):
+    def __init__(self, identifier, domain, packeter, codec=snakemq.codec.BerCodec()):
+        if identifier.endswith("."):
+            raise ValueError("identifier must not end with '.'")
+        if not domain.endswith("."):
+            raise ValueError("domain must end with '.'")
+
         self.identifier = identifier
-        self.transport = transport
+        self.domain = domain
+        self.packeter = packeter
         assert isinstance(codec, snakemq.codec.BaseCodec)
         self.codec = codec
         self.log = logging.getLogger("snakemq.messaging")
 
         # callbacks
-        self.on_error = _empty #: C{func(conn_id, exception)}
-        self.on_message_recv = _empty #: C{func(conn_id, ident, message)}
+        self.on_error = None #: C{func(conn_id, exception)}
+        self.on_message_recv = None #: C{func(conn_id, ident, message)}
 
         self._ident_by_conn = {}
         self._conn_by_ident = {}
 
-        self.transport.on_connect = self._on_connect
-        self.transport.on_disconnect = self._on_disconnect
-        self.transport.on_packet_recv = self._on_packet_recv
+        self.packeter.on_connect = self._on_connect
+        self.packeter.on_disconnect = self._on_disconnect
+        self.packeter.on_packet_recv = self._on_packet_recv
 
     ###########################################################
 
@@ -78,13 +75,14 @@ class Messaging(object):
     def _on_packet_recv(self, conn_id, packet):
         try:
             parts = self.codec.decode(packet)
+            del packet
 
             # TODO format checking
             for (part_type, data) in parts:
                 if part_type == PART_TYPE_PROTOCOL_VERSION:
                     if not self.accept_protocol_version(data):
                         self.log.warning("incompatible protocol version %i" % data)
-                    self.transport.link.close(conn_id)
+                    self.packeter.link.close(conn_id)
                 elif part_type == PART_TYPE_IDENT:
                     self._ident_by_conn[conn_id] = data
                     self._conn_by_ident[data] = conn_id
@@ -96,13 +94,14 @@ class Messaging(object):
         except snakemq.exceptions.SnakeMQException, exc:
             self.log.error("conn=%s ident=%s %r" % 
                   (conn_id, self._ident_by_conn.get(conn_id), exc))
-            self.on_error(conn_id, exc)
-            self.transport.link.close(conn_id)
+            if self.on_error:
+                self.on_error(conn_id, exc)
+            self.packeter.link.close(conn_id)
 
     ###########################################################
 
     def send_greetings(self, conn_id):
-        self.transport.send_packet(conn_id, self.codec.encode([
+        self.packeter.send_packet(conn_id, self.codec.encode([
               (PART_TYPE_PROTOCOL_VERSION, snakemq.version.PROTOCOL_VERSION),
               (PART_TYPE_IDENT, self.identifier)
             ]))
