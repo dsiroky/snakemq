@@ -1,10 +1,13 @@
 #!/usr/bin/python
+"""
+Send many small packets over a single connection.
+"""
 
 import time
 import logging
 import sys
+import os
 import cProfile as profile
-from multiprocessing import Process
 
 sys.path.insert(0, "../..")
 
@@ -27,7 +30,7 @@ def srv():
     def on_connect(conn_id):
         container["start_time"] = time.time()
 
-    def on_packet_recv(self, packet):
+    def on_packet_recv(conn_id, packet):
         assert len(packet) == DATA_SIZE
         container["count"] += 1
 
@@ -77,9 +80,7 @@ snakemq.init()
 logger = logging.getLogger("snakemq")
 logger.setLevel(logging.ERROR)
 
-thr_srv = Process(target=srv)
-thr_srv.start()
-thr_cli = Process(target=cli)
-thr_cli.start()
-thr_srv.join()
-thr_cli.join()
+if os.fork() > 0:
+    srv()
+else:
+    cli()

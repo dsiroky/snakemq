@@ -36,7 +36,7 @@ class TestLink(utils.TestCase):
             def on_recv(conn_id, data):
                 container["received"].append(data)
             def on_disconnect(conn_id):
-                link.quit()
+                link.stop()
 
             link.on_recv = on_recv
             link.on_disconnect = on_disconnect
@@ -48,10 +48,34 @@ class TestLink(utils.TestCase):
                 size = link.send(conn_id, data)
                 container["sent"] = data[:size]
                 link.close(conn_id)
-                link.quit()
+                link.stop()
 
             link.on_connect = on_connect
             link.loop(runtime=0.5)
 
         self.run_srv_cli(server, client)
         self.assertEqual(container["sent"], "".join(container["received"]))
+
+    ########################################################
+
+    def test_connector_cleanup(self):
+        link = snakemq.link.Link()
+        addr = link.add_connector(("localhost", TEST_PORT))
+        link._connect(addr)
+        link.del_connector(addr)
+        self.assertEqual(len(link._socks_waiting_to_connect), 0)
+        link.cleanup()
+
+    ########################################################
+
+    def test_connector_cleanup_connection_refused(self):
+        link = snakemq.link.Link()
+        link.handle_conn_refused = utils.FuncCallLogger(link.handle_conn_refused)
+        addr = link.add_connector(("localhost", TEST_PORT))
+        link._connect(addr)
+        link.loop_iteration(1.0)
+        # just make sure that the connection failed
+        self.assertEqual(len(link.handle_conn_refused.call_log), 1)
+        link.del_connector(addr)
+        self.assertEqual(len(link._socks_waiting_to_connect), 0)
+        link.cleanup()

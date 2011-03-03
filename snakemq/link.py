@@ -17,7 +17,7 @@ from snakemq.exceptions import SnakeMQUnknownConnectionID
 ############################################################################
 
 RECV_BLOCK_SIZE = 128 * 1024
-RECONNECT_INTERVAL = 1.0
+RECONNECT_INTERVAL = 3.0
 
 ############################################################################
 ############################################################################
@@ -25,36 +25,36 @@ RECONNECT_INTERVAL = 1.0
 class Link(object):
     """
     Just a bare wire stream communication. Keeper of opened (TCP) connections.
-    NOT thread-safe.
     """
 
     def __init__(self):
         self.poller = select.poll()
         self.log = logging.getLogger("snakemq.link")
 
-        # callbacks
+        #{ callbacks
         self.on_connect = None #: C{func(conn_id)}
         self.on_disconnect = None #: C{func(conn_id)}
         self.on_recv = None #: C{func(conn_id, data)}
         self.on_ready_to_send = None #: C{func(conn_id)}, last send was successful
         self.on_loop_iteration = None #: C{func()}
+        #}
         
-        self._do_loop = False # False breaks the loop
+        self._do_loop = False #: False breaks the loop
 
-        self._new_conn_id = 0 # counter for conn id generator
+        self._new_conn_id = 0 #: counter for conn id generator
 
         self._sock_by_fd = {}
         self._conn_by_sock = {}
         self._sock_by_conn = {}
 
-        self._listen_socks = {} # address:sock
+        self._listen_socks = {} #: address:sock
         self._listen_socks_filenos = set()
 
-        self._connectors = set()
-        self._socks_connectors = {} # sock:address
+        self._connectors = {} #: address:sock
+        self._socks_addresses = {} #: sock:address
         self._socks_waiting_to_connect = set()
-        self._plannned_connections = [] # (when, address)
-        self._reconnect_intervals = {} # address:interval
+        self._plannned_connections = [] #: (when, address)
+        self._reconnect_intervals = {} #: address:interval
 
     ##########################################################
 
@@ -69,7 +69,7 @@ class Link(object):
         """
         assert not self._do_loop
 
-        for address in list(self._connectors):
+        for address in self._connectors.keys():
             self.del_connector(address)
 
         for address in self._listen_socks.keys():
@@ -85,7 +85,7 @@ class Link(object):
         assert len(self._listen_socks) == 0
         assert len(self._listen_socks_filenos) == 0
         assert len(self._connectors) == 0
-        assert len(self._socks_connectors) == 0
+        assert len(self._socks_addresses) == 0
         assert len(self._socks_waiting_to_connect) == 0
         assert len(self._plannned_connections) == 0
         assert len(self._reconnect_intervals) == 0
@@ -98,20 +98,23 @@ class Link(object):
         to the pool.
         @param address: remote address
         @param reconnect_interval: reconnect interval in seconds
+        @return: connector address (use it for deletion)
         """
-        assert isinstance(reconnect_interval, (int, float))
         address = socket.gethostbyname(address[0]), address[1]
         if address in self._connectors:
             raise ValueError("connector '%r' already set", address)
-        self._connectors.add(address)
+        self._connectors[address] = None # no socket yet
         self._reconnect_intervals[address] = reconnect_interval
         self.plan_connect(0, address) # connect ASAP
+        return address
 
     ##########################################################
 
     def del_connector(self, address):
-        self._connectors.remove(address)
+        sock = self._connectors.pop(address)
+        self._socks_waiting_to_connect.discard(sock)
         del self._reconnect_intervals[address]
+
         # filter out address from plan
         self._plannned_connections = \
             [(when, _address)
@@ -123,6 +126,7 @@ class Link(object):
     def add_listener(self, address):
         """
         Adds listener to the pool. This method is not blocking. Run only once.
+        @return: listener address (use it for deletion)
         """
         address = socket.gethostbyname(address[0]), address[1]
         if address in self._listen_socks:
@@ -135,10 +139,12 @@ class Link(object):
         self._sock_by_fd[fileno] = listen_sock
         self._listen_socks[address] = listen_sock
         self._listen_socks_filenos.add(fileno)
+        self.poller.register(listen_sock, select.POLLIN)
 
         listen_sock.bind(address)
         listen_sock.listen(5)
-        self.poller.register(listen_sock, select.POLLIN)
+
+        return address
 
     ##########################################################
 
@@ -160,9 +166,10 @@ class Link(object):
 
         @return: number of bytes sent
         """
-        sock = self.get_socket(conn_id)
         try:
+            sock = self.get_socket(conn_id)
             sent_length = sock.send(data)
+            self.poller.modify(sock, select.POLLIN | select.POLLOUT)
         except socket.error, exc:
             err = exc.args[0]
             if err == errno.EWOULDBLOCK:
@@ -174,7 +181,6 @@ class Link(object):
             else:
                 raise
 
-        self.poller.modify(sock, select.POLLIN | select.POLLOUT)
         return sent_length
 
     ##########################################################
@@ -228,7 +234,7 @@ class Link(object):
 
     def stop(self):
         """
-        Interrupt the loop. It doesn't perform a cleanup.
+        Interrupt the loop. It doesn't perform a cleanup. Thread-safe.
         """
         self._do_loop = False
 
@@ -274,8 +280,10 @@ class Link(object):
         sock.setblocking(0)
 
         self._sock_by_fd[sock.fileno()] = sock
-        self._socks_connectors[sock] = address
+        self._connectors[address] = sock
+        self._socks_addresses[sock] = address
         self._socks_waiting_to_connect.add(sock)
+        self.poller.register(sock)
         
         err = sock.connect_ex(address)
         if err in (0, errno.EISCONN):
@@ -283,13 +291,11 @@ class Link(object):
         elif err not in (errno.EINPROGRESS, errno.EWOULDBLOCK):
             raise socket.error(err, errno.errorcode[err])
 
-        self.poller.register(sock)
-
     ##########################################################
 
     def handle_connect(self, sock):
+        self._socks_waiting_to_connect.remove(sock)
         self.poller.modify(sock, select.POLLIN)
-        self._socks_waiting_to_connect.discard(sock)
 
         conn_id = self.new_connection_id(sock)
         self.log.info("connect %s %r" % (conn_id, sock.getpeername()))
@@ -349,11 +355,12 @@ class Link(object):
     ##########################################################
 
     def handle_conn_refused(self, sock):
+        self._socks_waiting_to_connect.remove(sock)
         self.poller.unregister(sock)
         del self._sock_by_fd[sock.fileno()]
         sock.close()
 
-        address = self._socks_connectors.pop(sock)
+        address = self._socks_addresses.pop(sock)
         self.plan_connect(time.time() + self._reconnect_intervals[address],
                           address)
 
@@ -371,8 +378,8 @@ class Link(object):
             if self.on_disconnect:
                 self.on_disconnect(conn_id)
 
-        if sock in self._socks_connectors:
-            address = self._socks_connectors.pop(sock)
+        if sock in self._socks_addresses:
+            address = self._socks_addresses.pop(sock)
             interval = self._reconnect_intervals.get(address)
             if interval:
                 self.plan_connect(time.time() + interval, address)

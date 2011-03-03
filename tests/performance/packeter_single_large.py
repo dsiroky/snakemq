@@ -1,4 +1,7 @@
 #!/usr/bin/python
+"""
+Send a single large packet over a single connection.
+"""
 
 import time
 import logging
@@ -25,7 +28,7 @@ def srv():
     def on_connect(conn_id):
         container["start_time"] = time.time()
 
-    def on_packet_recv(self, packet):
+    def on_packet_recv(conn_id, packet):
         assert len(packet) == DATA_SIZE
         diff = time.time() - container["start_time"]
         print "flow: %.02f MBps" % (DATA_SIZE / diff / 1024**2)

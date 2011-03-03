@@ -6,7 +6,6 @@ all following packet data.
 @author: David Siroky (siroky@dasir.cz)
 """
 # TODO example or test for 2 links - send large data - sending should be interleaved
-# TODO id for packets
 
 import logging
 import struct
@@ -182,7 +181,7 @@ class Packeter(object):
                 first, packet_id = self._queued_packets.popleft()
                 if first <= sent_length:
                     if self.on_packet_sent:
-                        self.on_packet_sent(conn_id, None)
+                        self.on_packet_sent(conn_id, packet_id)
                 else:
                     self._queued_packets.appendleft((first - sent_length,
                                                     packet_id))

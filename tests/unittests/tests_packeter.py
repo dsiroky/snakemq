@@ -40,7 +40,7 @@ class TestPacketer(utils.TestCase):
                     link.close(conn_id)
 
             def on_disconnect(conn_id):
-                link.quit()
+                link.stop()
 
             packeter.on_packet_recv = on_recv
             packeter.on_disconnect = on_disconnect
@@ -52,7 +52,7 @@ class TestPacketer(utils.TestCase):
                     packeter.send_packet(conn_id, data)
 
             def on_disconnect(conn_id):
-                link.quit()
+                link.stop()
 
             packeter.on_connect = on_connect
             packeter.on_disconnect = on_disconnect
@@ -73,7 +73,7 @@ class TestPacketer(utils.TestCase):
                 link.close(conn_id)
 
             def on_disconnect(conn_id):
-                link.quit()
+                link.stop()
 
             packeter.on_packet_recv = on_recv
             packeter.on_disconnect = on_disconnect
@@ -84,7 +84,7 @@ class TestPacketer(utils.TestCase):
                 packeter.send_packet(conn_id, to_send)
 
             def on_disconnect(conn_id):
-                link.quit()
+                link.stop()
 
             packeter.on_connect = on_connect
             packeter.on_disconnect = on_disconnect
