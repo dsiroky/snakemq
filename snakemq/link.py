@@ -28,7 +28,7 @@ class Link(object):
     """
 
     def __init__(self):
-        self.poller = select.poll()
+        self.poller = select.epoll()
         self.log = logging.getLogger("snakemq.link")
 
         #{ callbacks
@@ -134,15 +134,14 @@ class Link(object):
         listen_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         fileno = listen_sock.fileno()
         listen_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        listen_sock.bind(address)
+        listen_sock.listen(10)
         listen_sock.setblocking(0)
 
         self._sock_by_fd[fileno] = listen_sock
         self._listen_socks[address] = listen_sock
         self._listen_socks_filenos.add(fileno)
-        self.poller.register(listen_sock, select.POLLIN)
-
-        listen_sock.bind(address)
-        listen_sock.listen(5)
+        self.poller.register(listen_sock, select.EPOLLIN)
 
         return address
 
@@ -169,7 +168,7 @@ class Link(object):
         try:
             sock = self.get_socket(conn_id)
             sent_length = sock.send(data)
-            self.poller.modify(sock, select.POLLIN | select.POLLOUT)
+            self.poller.modify(sock, select.EPOLLIN | select.EPOLLOUT)
         except socket.error, exc:
             err = exc.args[0]
             if err == errno.EWOULDBLOCK:
@@ -278,12 +277,12 @@ class Link(object):
         """
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.setblocking(0)
+        self.poller.register(sock)
 
         self._sock_by_fd[sock.fileno()] = sock
         self._connectors[address] = sock
         self._socks_addresses[sock] = address
         self._socks_waiting_to_connect.add(sock)
-        self.poller.register(sock)
         
         err = sock.connect_ex(address)
         if err in (0, errno.EISCONN):
@@ -295,7 +294,7 @@ class Link(object):
 
     def handle_connect(self, sock):
         self._socks_waiting_to_connect.remove(sock)
-        self.poller.modify(sock, select.POLLIN)
+        self.poller.modify(sock, select.EPOLLIN)
 
         conn_id = self.new_connection_id(sock)
         self.log.info("connect %s %r" % (conn_id, sock.getpeername()))
@@ -312,7 +311,7 @@ class Link(object):
             return
         newsock.setblocking(0)
         self._sock_by_fd[newsock.fileno()] = newsock
-        self.poller.register(newsock, select.POLLIN)
+        self.poller.register(newsock, select.EPOLLIN)
 
         conn_id = self.new_connection_id(newsock)
         self.log.info("accept %s %r" % (conn_id, address))
@@ -387,7 +386,7 @@ class Link(object):
     ##########################################################
 
     def handle_ready_to_send(self, sock):
-        self.poller.modify(sock, select.POLLIN)
+        self.poller.modify(sock, select.EPOLLIN)
         conn_id = self._conn_by_sock[sock]
         self.log.debug("ready to send " + conn_id)
         if self.on_ready_to_send:
@@ -402,18 +401,18 @@ class Link(object):
             return
         sock = self._sock_by_fd[fd]
 
-        if mask & (select.POLLERR | select.POLLHUP | select.POLLNVAL):
+        if mask & (select.EPOLLERR | select.EPOLLHUP):
             if sock in self._socks_waiting_to_connect:
                 self.handle_conn_refused(sock)
             else:
                 self.handle_close(sock)
         else:
-            if mask & select.POLLOUT:
+            if mask & select.EPOLLOUT:
                 if sock in self._socks_waiting_to_connect:
                     self.handle_connect(sock)
                 else:
                     self.handle_ready_to_send(sock)
-            if mask & select.POLLIN:
+            if mask & select.EPOLLIN:
                 if fd in self._listen_socks_filenos:
                     self.handle_accept(sock)
                 else:

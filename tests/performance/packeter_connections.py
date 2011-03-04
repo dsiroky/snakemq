@@ -9,6 +9,7 @@ import sys
 import os
 import threading
 import multiprocessing
+import random
 
 sys.path.insert(0, "../..")
 
@@ -20,10 +21,9 @@ import snakemq.exceptions
 ###########################################################################
 
 DATA_SIZE = 5
-CLI_PROC_COUNT = 5
-CLI_THR_COUNT = 5
-COUNT = 100
-RUNTIME = 3.0
+CLI_PROC_COUNT = 10
+CLI_THR_COUNT = 20
+PACKETS_COUNT = 1000
 PORT = 4000
 
 ###########################################################################
@@ -37,38 +37,38 @@ def check_barrier():
     barrier.value += 1
     barrier.release()
 
-    while barrier.value < CLI_PROC_COUNT * CLI_THR_COUNT + 1:
+    while barrier.value < CLI_PROC_COUNT * CLI_THR_COUNT:
         pass
 
 ###########################################################################
 
 def srv():
     s = snakemq.link.Link()
-    container = {"start_time": time.time(), "count": 0}
+    container = {"start_time": None, "cli_count": 0, "count": 0}
 
     def on_connect(conn_id):
-        print conn_id
-        pass
+        container["cli_count"] += 1
+        if container["cli_count"] == CLI_PROC_COUNT * CLI_THR_COUNT:
+            container["start_time"] = time.time()
+            print "all connected"
 
     def on_packet_recv(conn_id, packet):
         assert len(packet) == DATA_SIZE
         container["count"] += 1
-        if container["count"] >= COUNT * CLI_PROC_COUNT * CLI_THR_COUNT:
+        if container["count"] >= PACKETS_COUNT * CLI_PROC_COUNT * CLI_THR_COUNT:
             s.stop()
 
     s.add_listener(("", PORT))
     tr = snakemq.packeter.Packeter(s)
     tr.on_connect = on_connect
     tr.on_packet_recv = on_packet_recv
-    check_barrier()
     s.loop()
     s.cleanup()
 
     diff = time.time() - container["start_time"]
     count = container["count"]
-    print count
-    print "flow: %.02f MBps, %i pkts/s" % (DATA_SIZE * count / diff / 1024**2,
-                count / diff)
+    print "flow: %.02f MBps, total %i pkts, %i pkts/s" % (
+          DATA_SIZE * count / diff / 1024**2, count, count / diff)
 
 ###########################################################################
 
@@ -76,21 +76,22 @@ def cli():
     s = snakemq.link.Link()
 
     def on_connect(conn_id):
-        for i in xrange(COUNT):
-            try:
-                tr.send_packet(conn_id, "x" * DATA_SIZE)
-            except snakemq.exceptions.SnakeMQUnknownConnectionID:
-                break
-            #print "a",os.getpid()
+        check_barrier()
+        for i in xrange(PACKETS_COUNT):
+            tr.send_packet(conn_id, "x" * DATA_SIZE)
 
     def on_disconnect(conn_id):
         s.stop()
 
-    s.add_connector(("localhost", PORT))
+    # listen queue on the server is short so the reconnect interval needs to be
+    # short because all clients are trying to connect almost at the same time
+    s.add_connector(("localhost", PORT), reconnect_interval=0.3)
+    # spread the connections
+    time.sleep(random.randint(0, 1000) / 1000.0)
+
     tr = snakemq.packeter.Packeter(s)
     tr.on_connect = on_connect
     tr.on_disconnect = on_disconnect
-    check_barrier()
     s.loop()
     s.cleanup()
 
