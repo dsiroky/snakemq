@@ -5,19 +5,19 @@
 
 import select
 import socket
+import os
 import sys
 import errno
 import time
 import bisect
 import logging
 
-from snakemq.exceptions import SnakeMQUnknownConnectionID
-
 ############################################################################
 ############################################################################
 
-RECV_BLOCK_SIZE = 128 * 1024
 RECONNECT_INTERVAL = 3.0
+RECV_BLOCK_SIZE = 256 * 1024
+POLL_TIMEOUT = 0.1
 
 ############################################################################
 ############################################################################
@@ -25,23 +25,31 @@ RECONNECT_INTERVAL = 3.0
 class Link(object):
     """
     Just a bare wire stream communication. Keeper of opened (TCP) connections.
+    B{Not thread-safe} but you can synchronize with the loop using L{wakeup_poll}
+    and L{on_loop_iteration}.
     """
 
     def __init__(self):
-        self.poller = select.epoll()
         self.log = logging.getLogger("snakemq.link")
+
+        self.reconnect_interval = RECONNECT_INTERVAL #: in seconds
+        self.recv_block_size = RECV_BLOCK_SIZE
 
         #{ callbacks
         self.on_connect = None #: C{func(conn_id)}
         self.on_disconnect = None #: C{func(conn_id)}
         self.on_recv = None #: C{func(conn_id, data)}
         self.on_ready_to_send = None #: C{func(conn_id)}, last send was successful
-        self.on_loop_iteration = None #: C{func()}
+        self.on_loop_iteration = None #: C{func()}, called after poll is processed
         #}
         
         self._do_loop = False #: False breaks the loop
 
         self._new_conn_id = 0 #: counter for conn id generator
+
+        self.poller = select.epoll()
+        self._poll_bell = os.pipe()[1]
+        self.poller.register(self._poll_bell, select.EPOLLOUT)
 
         self._sock_by_fd = {}
         self._conn_by_sock = {}
@@ -92,7 +100,7 @@ class Link(object):
         
     ##########################################################
 
-    def add_connector(self, address, reconnect_interval=RECONNECT_INTERVAL):
+    def add_connector(self, address, reconnect_interval=None):
         """
         This will not create an immediate connection. It just adds a connector
         to the pool.
@@ -104,7 +112,8 @@ class Link(object):
         if address in self._connectors:
             raise ValueError("connector '%r' already set", address)
         self._connectors[address] = None # no socket yet
-        self._reconnect_intervals[address] = reconnect_interval
+        self._reconnect_intervals[address] = \
+                reconnect_interval or self.reconnect_interval
         self.plan_connect(0, address) # connect ASAP
         return address
 
@@ -156,17 +165,24 @@ class Link(object):
 
     ##########################################################
 
+    def wakeup_poll(self):
+        """
+        Thread-safe.
+        """
+        os.write(self._poll_bell, "")
+
+    ##########################################################
+
     def send(self, conn_id, data):
         """
-        WARNING: this operation is non-blocking and if the remote side closes
-        the connection then this call will be successful but the data will
-        be lost. Always wait for C{Link.on_ready_to_send} to have confirmation
-        about successful send.
+        WARNING: this operation is non-blocking, data might be lost on a closed
+        connection. Always wait for C{Link.on_ready_to_send} to have
+        confirmation about successful send.
 
         @return: number of bytes sent
         """
         try:
-            sock = self.get_socket(conn_id)
+            sock = self._sock_by_conn[conn_id]
             sent_length = sock.send(data)
             self.poller.modify(sock, select.EPOLLIN | select.EPOLLOUT)
         except socket.error, exc:
@@ -184,23 +200,12 @@ class Link(object):
 
     ##########################################################
 
-    def get_socket(self, conn_id):
-        """
-        @raise SnakeMQUnknownConnectionID: when the C{conn_id} is nonexistent
-        """
-        try:
-            return self._sock_by_conn[conn_id]
-        except KeyError:
-            raise SnakeMQUnknownConnectionID(conn_id)
-
-    ##########################################################
-
     def close(self, conn_id):
-        self.handle_close(self.get_socket(conn_id))
+        self.handle_close(self._sock_by_conn[conn_id])
 
     ##########################################################
 
-    def loop(self, poll_timeout=0.1, count=None, runtime=None):
+    def loop(self, poll_timeout=POLL_TIMEOUT, count=None, runtime=None):
         """
         Start the communication loop.
         @param poll_timeout: in seconds, should be less then the minimal
@@ -209,8 +214,6 @@ class Link(object):
         @param runtime: max time of running loop in seconds (also depends
                         on the poll timeout) or None
         """
-        poll_timeout *= 1000
-
         self._do_loop = True
 
         # plan fresh connects
@@ -233,7 +236,7 @@ class Link(object):
 
     def stop(self):
         """
-        Interrupt the loop. It doesn't perform a cleanup. Thread-safe.
+        Interrupt the loop. It doesn't perform a cleanup.
         """
         self._do_loop = False
 
@@ -321,15 +324,17 @@ class Link(object):
     ##########################################################
 
     def handle_recv(self, sock):
-        buf = []
         do_close = False
+        conn_id = self._conn_by_sock[sock]
         while True:
             try:
-                fragment = sock.recv(RECV_BLOCK_SIZE)
+                fragment = sock.recv(self.recv_block_size)
                 if not fragment:
                     do_close = True
                     break
-                buf.append(fragment)
+                self.log.debug("recv %s len=%i" % (conn_id, len(fragment)))
+                if self.on_recv:
+                    self.on_recv(conn_id, fragment)
             except socket.error, exc:
                 err = exc.args[0]
                 if err == errno.EWOULDBLOCK:
@@ -341,13 +346,6 @@ class Link(object):
                 else:
                     raise
 
-        if buf:
-            buf = "".join(buf)
-            conn_id = self._conn_by_sock[sock]
-            self.log.debug("recv %s len=%i" % (conn_id, len(buf)))
-            if self.on_recv:
-                self.on_recv(conn_id, buf)
-        
         if do_close:
             self.handle_close(sock)
 

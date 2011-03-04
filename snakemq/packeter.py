@@ -12,12 +12,12 @@ import struct
 from collections import deque
 
 from snakemq.buffers import StreamBuffer
-from snakemq.exceptions import SnakeMQUnknownConnectionID, SnakeMQBadPacket
+from snakemq.exceptions import SnakeMQBadPacket
 
 ############################################################################
 ############################################################################
 
-SEND_BLOCK_SIZE = 16 * 1024
+SEND_BLOCK_SIZE = 64 * 1024
 
 BIN_SIZE_FORMAT = "!I" # network order 32-bit unsigned integer
 SIZEOF_BIN_SIZE = struct.calcsize(BIN_SIZE_FORMAT)
@@ -84,9 +84,7 @@ class ConnectionInfo(object):
 
 class Packeter(object):
     """
-    Packets transport between nodes. Data of unfinished packet reception
-    (closed connection) will be dropped. Packets over a single connection are
-    serialized one by one.
+    B{NOT THREAD-SAFE}, only for simple testing.
     """
 
     def __init__(self, link):
@@ -119,10 +117,7 @@ class Packeter(object):
         Queue data to be sent over the link.
         @return: packet id
         """
-        try:
-            conn = self._connections[conn_id]
-        except KeyError:
-            raise SnakeMQUnknownConnectionID(conn_id)
+        conn = self._connections[conn_id]
 
         self._last_packet_id += 1
         packet_id = self._last_packet_id
