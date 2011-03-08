@@ -11,6 +11,7 @@ import snakemq
 from tests_link import *
 from tests_packeter import *
 from tests_buffers import *
+from tests_queues import *
 
 if __name__ == "__main__":
     snakemq.init()

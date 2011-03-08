@@ -17,9 +17,7 @@ PART_TYPE_PROTOCOL_VERSION = 0
 PART_TYPE_IDENT = 1
 PART_TYPE_MESSAGE = 2
 
-MESSAGE_TYPE_SIGNAL = 0 #: deliver only if connected
-MESSAGE_TYPE_TRANSIENT = 1 #: drop on process end (queue to memory if needed)
-MESSAGE_TYPE_PERSISTENT = 2 #: deliver at all cost (queue to disk if needed)
+MESSAGE_FLAG_PERSISTENT = 0x1 #: deliver at all cost (queue to disk as well)
 
 #############################################################################
 #############################################################################
@@ -120,12 +118,11 @@ class Messaging(object):
 
     ###########################################################
 
-    def send_message(self, ident, message, ttl=None, msg_type=MESSAGE_TYPE_SIGNAL):
+    def send_message(self, ident, message, ttl=None, flags=0):
         """
         @param ident: destination address
         @param message: any string
-        @param ttl: time to live - C{datetime.DateTime} when the message
-                    should be dropped or None
-        @param msg_type:
+        @param ttl:
+        @param flags:
         """
         conn_id = self.get_route(ident)

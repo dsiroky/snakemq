@@ -5,7 +5,6 @@ all following packet data.
 
 @author: David Siroky (siroky@dasir.cz)
 """
-# TODO example or test for 2 links - send large data - sending should be interleaved
 
 import logging
 import struct

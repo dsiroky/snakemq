@@ -328,6 +328,7 @@ class Link(object):
         conn_id = self._conn_by_sock[sock]
         while True:
             try:
+                # do not put it in a draining cycle to avoid starvation
                 fragment = sock.recv(self.recv_block_size)
                 if not fragment:
                     do_close = True
