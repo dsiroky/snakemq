@@ -7,10 +7,19 @@ import snakemq.packeter
 
 import utils
 
+#############################################################################
+#############################################################################
+
 TEST_PORT = 40000
+
+#############################################################################
+#############################################################################
 
 class TestPacketer(utils.TestCase):
     def run_srv_cli(self, server, client):
+        """
+        Server is executed in a thread.
+        """
         link_server = snakemq.link.Link()
         link_server.add_listener(("", TEST_PORT))
         packeter_server = snakemq.packeter.Packeter(link=link_server)
@@ -20,12 +29,13 @@ class TestPacketer(utils.TestCase):
 
         thr_server = threading.Thread(target=server, args=[link_server,
                                                           packeter_server])
-        thr_server.start()
-        client(link_client, packeter_client)
-        thr_server.join()
-
-        link_server.cleanup()
-        link_client.cleanup()
+        try:
+            thr_server.start()
+            client(link_client, packeter_client)
+            thr_server.join()
+        finally:
+            link_server.cleanup()
+            link_client.cleanup()
 
     ########################################################
 

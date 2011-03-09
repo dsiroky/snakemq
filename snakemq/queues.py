@@ -17,7 +17,7 @@ FLAG_PERSISTENT = 1
 ###########################################################################
 
 class Item(object):
-    def __init__(self, uuid, data, ttl, flags=0):
+    def __init__(self, uuid, data, ttl=0, flags=0):
         self.uuid = uuid
         self.data = data
         self.ttl = ttl
@@ -87,7 +87,7 @@ class Queue(object):
             return
         item = self.queue.pop(0)
         if item.flags & FLAG_PERSISTENT:
-            self.manager.storage.delete_items([item.uuid])
+            self.manager.storage.delete_items([item])
 
     def __len__(self):
         return len(self.queue)
@@ -134,6 +134,9 @@ class QueuesManager(object):
         self.queues.clear()
         self.storage.close()
         self.storage = None
+
+    def __len__(self):
+        return len(self.queues)
 
 ###########################################################################
 ###########################################################################

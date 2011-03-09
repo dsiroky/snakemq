@@ -82,10 +82,6 @@ class ConnectionInfo(object):
 ############################################################################
 
 class Packeter(object):
-    """
-    B{NOT THREAD-SAFE}, only for simple testing.
-    """
-
     def __init__(self, link):
         self.link = link
         self.log = logging.getLogger("snakemq.packeter")
@@ -112,7 +108,6 @@ class Packeter(object):
 
     def send_packet(self, conn_id, buf):
         """
-        Thread-safe.
         Queue data to be sent over the link.
         @return: packet id
         """

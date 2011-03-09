@@ -17,7 +17,8 @@ import logging
 
 RECONNECT_INTERVAL = 3.0
 RECV_BLOCK_SIZE = 256 * 1024
-POLL_TIMEOUT = 0.1
+POLL_TIMEOUT = 0.2
+BELL_READ = 1024
 
 ############################################################################
 ############################################################################
@@ -48,8 +49,9 @@ class Link(object):
         self._new_conn_id = 0 #: counter for conn id generator
 
         self.poller = select.epoll()
-        self._poll_bell = os.pipe()[1]
-        self.poller.register(self._poll_bell, select.EPOLLOUT)
+        self._poll_bell = os.pipe()
+        self.log.debug("poll bell fd=%r" % (self._poll_bell,))
+        self.poller.register(self._poll_bell[0], select.EPOLLIN) # read part
 
         self._sock_by_fd = {}
         self._conn_by_sock = {}
@@ -152,6 +154,7 @@ class Link(object):
         self._listen_socks_filenos.add(fileno)
         self.poller.register(listen_sock, select.EPOLLIN)
 
+        self.log.debug("add_listener fd=%i %r" % (fileno, address))
         return address
 
     ##########################################################
@@ -169,7 +172,7 @@ class Link(object):
         """
         Thread-safe.
         """
-        os.write(self._poll_bell, "")
+        os.write(self._poll_bell[1], "a")
 
     ##########################################################
 
@@ -224,7 +227,7 @@ class Link(object):
                 (count is not 0) and 
                 not ((runtime is not None) and
                       (time.time() - time_start > runtime))):
-            is_event = self.loop_iteration(poll_timeout)
+            is_event = len(self.loop_iteration(poll_timeout))
             if self.on_loop_iteration:
                 self.on_loop_iteration()
             if is_event and (count is not None):
@@ -324,31 +327,26 @@ class Link(object):
     ##########################################################
 
     def handle_recv(self, sock):
-        do_close = False
         conn_id = self._conn_by_sock[sock]
-        while True:
-            try:
-                # do not put it in a draining cycle to avoid starvation
-                fragment = sock.recv(self.recv_block_size)
-                if not fragment:
-                    do_close = True
-                    break
+
+        # do not put it in a draining cycle to avoid other links starvation
+        try:
+            fragment = sock.recv(self.recv_block_size)
+            if fragment:
                 self.log.debug("recv %s len=%i" % (conn_id, len(fragment)))
                 if self.on_recv:
                     self.on_recv(conn_id, fragment)
-            except socket.error, exc:
-                err = exc.args[0]
-                if err == errno.EWOULDBLOCK:
-                    break
-                elif err in (errno.ECONNRESET, errno.ENOTCONN, errno.ESHUTDOWN,
-                            errno.ECONNABORTED, errno.EPIPE, errno.EBADF):
-                    do_close = True
-                    break
-                else:
-                    raise
-
-        if do_close:
-            self.handle_close(sock)
+            else:
+                self.handle_close(sock)
+        except socket.error, exc:
+            err = exc.args[0]
+            if err in (errno.ECONNRESET, errno.ENOTCONN, errno.ESHUTDOWN,
+                        errno.ECONNABORTED, errno.EPIPE, errno.EBADF):
+                self.log.debug("recv %s error %s" %
+                                  (conn_id, errno.errorcode[err]))
+                self.handle_close(sock)
+            elif err != errno.EWOULDBLOCK:
+                raise
 
     ##########################################################
 
@@ -394,40 +392,45 @@ class Link(object):
     ##########################################################
 
     def handle_fd_mask(self, fd, mask):
-        # socket might have been already discarded by the Link
-        # so this iteration might be skipped
-        if fd not in self._sock_by_fd:
-            return
-        sock = self._sock_by_fd[fd]
-
-        if mask & (select.EPOLLERR | select.EPOLLHUP):
-            if sock in self._socks_waiting_to_connect:
-                self.handle_conn_refused(sock)
-            else:
-                self.handle_close(sock)
+        if fd == self._poll_bell[0]:
+            assert mask & select.EPOLLIN
+            bell_data = os.read(self._poll_bell[0], BELL_READ) # flush the pipe
+            assert len(bell_data) == 1
         else:
-            if mask & select.EPOLLOUT:
+            # socket might have been already discarded by the Link
+            # so this iteration might be skipped
+            if fd not in self._sock_by_fd:
+                return
+            sock = self._sock_by_fd[fd]
+
+            if mask & (select.EPOLLERR | select.EPOLLHUP):
                 if sock in self._socks_waiting_to_connect:
-                    self.handle_connect(sock)
+                    self.handle_conn_refused(sock)
                 else:
-                    self.handle_ready_to_send(sock)
-            if mask & select.EPOLLIN:
-                if fd in self._listen_socks_filenos:
-                    self.handle_accept(sock)
-                else:
-                    self.handle_recv(sock)
+                    self.handle_close(sock)
+            else:
+                if mask & select.EPOLLOUT:
+                    if sock in self._socks_waiting_to_connect:
+                        self.handle_connect(sock)
+                    else:
+                        self.handle_ready_to_send(sock)
+                if mask & select.EPOLLIN:
+                    if fd in self._listen_socks_filenos:
+                        self.handle_accept(sock)
+                    else:
+                        self.handle_recv(sock)
 
     ##########################################################
 
     def loop_iteration(self, poll_timeout):
         """
-        @return: number of sockets with performed operations
+        @return: values returned by poll 
         """
         fds = self.poller.poll(poll_timeout)
         for fd, mask in fds:
             self.handle_fd_mask(fd, mask)
         self.deal_connects()
-        return len(fds)
+        return fds
 
     ##########################################################
 
