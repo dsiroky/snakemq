@@ -11,7 +11,7 @@ import sqlite3
 ###########################################################################
 ###########################################################################
 
-FLAG_PERSISTENT = 1
+FLAG_PERSISTENT = 0x1
 
 ###########################################################################
 ###########################################################################
@@ -189,25 +189,26 @@ class SqliteQueuesStorage(object):
                           (queue_name,))
         items = []
         for res in self.crs.fetchall():
-            items.append(Item(res[0], res[1], res[2], res[3]))
+            items.append(Item(res[0].decode("base64"), res[1], res[2], res[3]))
         return items
 
     def push(self, queue_name, item):
         self.crs.execute("""INSERT INTO items
                                 (queue_name, uuid, data, ttl, flags)
                                 VALUES (?, ?, ?, ?, ?)""",
-                      (queue_name, item.uuid, item.data, item.ttl, item.flags))
+                      (queue_name, item.uuid.encode("base64"), item.data,
+                      item.ttl, item.flags))
         self.conn.commit()
 
     def delete_items(self, items):
         # TODO use SQL operator "IN"
         for item in items:
             self.crs.execute("""DELETE FROM items WHERE uuid = ?""", 
-                              (item.uuid,))
+                              (item.uuid.encode("base64"),))
         self.conn.commit()
 
     def update_items_ttl(self, items):
         for item in items:
             self.crs.execute("""UPDATE items SET ttl = ? WHERE uuid = ?""",
-                          (item.ttl, item.uuid))
+                          (item.ttl, item.uuid.encode("base64")))
         self.conn.commit()

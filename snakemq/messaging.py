@@ -1,21 +1,39 @@
 # -*- coding: utf-8 -*-
 """
+Data format
+===========
+Each packet contains always a single frame: C{[1B type|payload]}.
+
+Payload
+-------
+- protokol version: C{[4B version]}.
+- incompatible protocol: C{[]}
+- identification: C{[ident]}
+- message: C{[16B UUID|4B TTL|4B flags|message]}
+
 @author: David Siroky (siroky@dasir.cz)
 """
-# TODO same ident over more links + round robin sending
 
+import struct
 import logging
 
-import snakemq.codec
-import snakemq.exceptions
+from snakemq.exceptions import SnakeMQBrokenMessage, SnakeMQException
 import snakemq.version
 
 ############################################################################
 ############################################################################
 
-PART_TYPE_PROTOCOL_VERSION = 0
-PART_TYPE_IDENT = 1
-PART_TYPE_MESSAGE = 2
+FRAME_TYPE_PROTOCOL_VERSION = "\x00"
+FRAME_TYPE_INCOMPATIBLE_PROTOCOL = "\x01"
+FRAME_TYPE_IDENTIFICATION = "\x02"
+FRAME_TYPE_MESSAGE = "\x03"
+
+FRAME_FORMAT_PROTOCOL_VERSION = "!I"
+FRAME_FORMAT_PROTOCOL_VERSION_SIZE = struct.calcsize(FRAME_FORMAT_PROTOCOL_VERSION)
+FRAME_FORMAT_MESSAGE = "!16sII"
+FRAME_FORMAT_MESSAGE_SIZE = struct.calcsize(FRAME_FORMAT_MESSAGE)
+
+MIN_FRAME_SIZE = 1 # just the type field
 
 MESSAGE_FLAG_PERSISTENT = 0x1 #: deliver at all cost (queue to disk as well)
 
@@ -23,17 +41,10 @@ MESSAGE_FLAG_PERSISTENT = 0x1 #: deliver at all cost (queue to disk as well)
 #############################################################################
 
 class Messaging(object):
-    def __init__(self, identifier, domain, packeter, codec=snakemq.codec.BerCodec()):
-        if identifier.endswith("."):
-            raise ValueError("identifier must not end with '.'")
-        if not domain.endswith("."):
-            raise ValueError("domain must end with '.'")
-
+    def __init__(self, identifier, domain, packeter):
         self.identifier = identifier
         self.domain = domain
         self.packeter = packeter
-        assert isinstance(codec, snakemq.codec.BaseCodec)
-        self.codec = codec
         self.log = logging.getLogger("snakemq.messaging")
 
         # callbacks
@@ -43,14 +54,16 @@ class Messaging(object):
         self._ident_by_conn = {}
         self._conn_by_ident = {}
 
-        self.packeter.on_connect = self._on_connect
-        self.packeter.on_disconnect = self._on_disconnect
-        self.packeter.on_packet_recv = self._on_packet_recv
+        packeter.link.on_loop_pass = self.on_link_loop_pass
+        packeter.on_connect = self._on_connect
+        packeter.on_disconnect = self._on_disconnect
+        packeter.on_packet_recv = self._on_packet_recv
 
     ###########################################################
 
     def _on_connect(self, conn_id):
-        self.send_greetings(conn_id)
+        self.send_protocol_version(conn_id)
+        self.send_identification(conn_id)
 
     ###########################################################
 
@@ -61,35 +74,59 @@ class Messaging(object):
 
     ###########################################################
 
-    def accept_protocol_version(self, remote_version):
-        """
-        You can override this.
-        @return: bool
-        """
-        return remote_version == snakemq.version.PROTOCOL_VERSION
+    def parse_protocol_version(self, payload, conn_id):
+        if len(payload) != FRAME_FORMAT_PROTOCOL_VERSION_SIZE:
+            raise SnakeMQBrokenMessage("protocol version")
+
+        protocol = struct.unpack(FRAME_FORMAT_PROTOCOL_VERSION, payload)[0]
+        if protocol != snakemq.version.PROTOCOL_VERSION:
+            self.send_incompatible_protocol(conn_id)
+            raise SnakeMQIncompatibleProtocol(
+                            "remote side protocol version is %i" % protocol)
+        self.log.debug("conn=%s remote version %X" % (conn_id, protocol))
+
+    ###########################################################
+
+    def parse_incompatible_protocol(self, conn_id):
+        self.log.debug("conn=%s remote side rejected protocol version" % conn_id)
+        # TODO
+
+    ###########################################################
+
+    def parse_identification(self, remote_ident, conn_id):
+        self.log.debug("conn=%s remote ident '%s'" % (conn_id, remote_ident))
+        self._ident_by_conn[conn_id] = remote_ident
+        self._conn_by_ident[remote_ident] = conn_id
+
+    ###########################################################
+
+    def parse_mess(self, payload, conn_id):
+        if len(payload) < FRAME_FORMAT_MESSAGE_SIZE:
+            raise SnakeMQBrokenMessage("message")
+
+        uuid, ttl, flags = struct.unpack(FRAME_FORMAT_MESSAGE)
+        print uuid, ttl, flags
 
     ###########################################################
 
     def _on_packet_recv(self, conn_id, packet):
         try:
-            parts = self.codec.decode(packet)
+            if len(packet) < MIN_FRAME_SIZE:
+                raise SnakeMQBrokenMessage("too small")
+
+            frame_type = packet[0]
+            payload = packet[1:]
             del packet
 
-            # TODO format checking
-            for (part_type, data) in parts:
-                if part_type == PART_TYPE_PROTOCOL_VERSION:
-                    if not self.accept_protocol_version(data):
-                        self.log.warning("incompatible protocol version %i" % data)
-                    self.packeter.link.close(conn_id)
-                elif part_type == PART_TYPE_IDENT:
-                    self._ident_by_conn[conn_id] = data
-                    self._conn_by_ident[data] = conn_id
-                    self.log.info("ident %s:%s"  % (conn_id, data))
-                else:
-                    pass
-                    # TODO queuing, routing
-
-        except snakemq.exceptions.SnakeMQException, exc:
+            if frame_type == FRAME_TYPE_PROTOCOL_VERSION:
+                self.parse_protocol_version(payload, conn_id)
+            elif frame_type == FRAME_TYPE_INCOMPATIBLE_PROTOCOL:
+                self.parse_incompatible_protocol(conn_id)
+            elif frame_type == FRAME_TYPE_IDENTIFICATION:
+                self.parse_identification(payload, conn_id)
+            elif frame_type == FRAME_TYPE_MESSAGE:
+                self.parse_message(payload, conn_id)
+        except SnakeMQException, exc:
             self.log.error("conn=%s ident=%s %r" % 
                   (conn_id, self._ident_by_conn.get(conn_id), exc))
             if self.on_error:
@@ -98,11 +135,34 @@ class Messaging(object):
 
     ###########################################################
 
-    def send_greetings(self, conn_id):
-        self.packeter.send_packet(conn_id, self.codec.encode([
-              (PART_TYPE_PROTOCOL_VERSION, snakemq.version.PROTOCOL_VERSION),
-              (PART_TYPE_IDENT, self.identifier)
-            ]))
+    def send_protocol_version(self, conn_id):
+        self.packeter.send_packet(conn_id,
+            FRAME_TYPE_PROTOCOL_VERSION + 
+            struct.pack(FRAME_FORMAT_PROTOCOL_VERSION,
+                        snakemq.version.PROTOCOL_VERSION))
+
+    ###########################################################
+
+    def send_incompatible_protocol(self, conn_id):
+        self.packeter.send_packet(conn_id,
+            FRAME_TYPE_INCOMPATIBLE_PROTOCOL)
+
+    ###########################################################
+
+    def send_identification(self, conn_id):
+        self.packeter.send_packet(conn_id,
+            FRAME_TYPE_IDENTIFICATION + self.identifier)
+
+    ###########################################################
+
+    def send_message_frame(self, conn_id, message):
+        self.packeter.send_packet(conn_id,
+            FRAME_TYPE_MESSAGE +
+            struct.pack(FRAME_FORMAT_MESSAGE,
+                        message.uuid.bytes,
+                        message.ttl,
+                        message.flags) +
+            message.data)
 
     ###########################################################
 
@@ -115,6 +175,12 @@ class Messaging(object):
             return self._conn_by_ident[ident]
         except KeyError:
             raise snakemq.exceptions.SnakeMQUnknownRoute(ident)
+
+    ###########################################################
+
+    def on_link_loop_pass(self):
+        #print "aa"
+        pass
 
     ###########################################################
 

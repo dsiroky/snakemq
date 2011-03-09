@@ -85,7 +85,7 @@ class TestLink(utils.TestCase):
         link.handle_conn_refused = utils.FuncCallLogger(link.handle_conn_refused)
         addr = link.add_connector(("localhost", TEST_PORT))
         link._connect(addr)
-        link.loop_iteration(1.0)
+        link.loop_pass(1.0)
         # just make sure that the connection failed
         # TODO replace with mocker
         self.assertEqual(len(link.handle_conn_refused.call_log), 1)
@@ -104,10 +104,10 @@ class TestLink(utils.TestCase):
         bell_rd = link._poll_bell[0]
         
         # no event, no descriptor returned by poll
-        self.assertEqual(len(link.loop_iteration(0)), 0)
+        self.assertEqual(len(link.loop_pass(0)), 0)
         
         link.wakeup_poll()
-        self.assertEqual(link.loop_iteration(0)[0][0], bell_rd)
+        self.assertEqual(link.loop_pass(0)[0][0], bell_rd)
 
         # make sure that the pipe is flushed after wakeup
         fcntl.fcntl(bell_rd, fcntl.F_SETFL, os.O_NONBLOCK)

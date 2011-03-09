@@ -20,4 +20,3 @@ def init():
                     "%(asctime)s %(name)s %(levelname)s %(message)s")
     handler.setFormatter(formatter)
     logger.addHandler(handler)
-

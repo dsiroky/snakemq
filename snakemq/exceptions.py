@@ -6,9 +6,24 @@
 class SnakeMQException(Exception):
     pass
 
-class SnakeMQBadPacket(SnakeMQException):
+class SnakeMQBrokenFormat(SnakeMQException):
+    pass
+
+class SnakeMQBrokenPacket(SnakeMQBrokenFormat):
     """
     Received packet has wrong structure.
+    """
+    pass
+
+class SnakeMQBrokenMessage(SnakeMQBrokenFormat):
+    """
+    Received message has wrong structure.
+    """
+    pass
+
+class SnakeMQIncompatibleProtocol(SnakeMQException):
+    """
+    Remote side has incompatible protocol version.
     """
     pass
 

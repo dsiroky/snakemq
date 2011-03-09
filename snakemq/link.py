@@ -27,7 +27,7 @@ class Link(object):
     """
     Just a bare wire stream communication. Keeper of opened (TCP) connections.
     B{Not thread-safe} but you can synchronize with the loop using L{wakeup_poll}
-    and L{on_loop_iteration}.
+    and L{on_loop_pass}.
     """
 
     def __init__(self):
@@ -41,7 +41,7 @@ class Link(object):
         self.on_disconnect = None #: C{func(conn_id)}
         self.on_recv = None #: C{func(conn_id, data)}
         self.on_ready_to_send = None #: C{func(conn_id)}, last send was successful
-        self.on_loop_iteration = None #: C{func()}, called after poll is processed
+        self.on_loop_pass = None #: C{func()}, called after poll is processed
         #}
         
         self._do_loop = False #: False breaks the loop
@@ -227,9 +227,9 @@ class Link(object):
                 (count is not 0) and 
                 not ((runtime is not None) and
                       (time.time() - time_start > runtime))):
-            is_event = len(self.loop_iteration(poll_timeout))
-            if self.on_loop_iteration:
-                self.on_loop_iteration()
+            is_event = len(self.loop_pass(poll_timeout))
+            if self.on_loop_pass:
+                self.on_loop_pass()
             if is_event and (count is not None):
                 count -= 1
 
@@ -398,7 +398,7 @@ class Link(object):
             assert len(bell_data) == 1
         else:
             # socket might have been already discarded by the Link
-            # so this iteration might be skipped
+            # so this pass might be skipped
             if fd not in self._sock_by_fd:
                 return
             sock = self._sock_by_fd[fd]
@@ -422,7 +422,7 @@ class Link(object):
 
     ##########################################################
 
-    def loop_iteration(self, poll_timeout):
+    def loop_pass(self, poll_timeout):
         """
         @return: values returned by poll 
         """

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Packet format: [4B size|payload], size is bytes count (in network order) of
-all following packet data.
+Packet format: C{[4B size|payload]}, size is bytes count (unsigned integer in
+network order) of all following packet data.
 
 @author: David Siroky (siroky@dasir.cz)
 """
@@ -11,7 +11,7 @@ import struct
 from collections import deque
 
 from snakemq.buffers import StreamBuffer
-from snakemq.exceptions import SnakeMQBadPacket
+from snakemq.exceptions import SnakeMQBrokenPacket
 
 ############################################################################
 ############################################################################
@@ -57,7 +57,7 @@ class ReceiveBuffer(StreamBuffer):
                 header = self.get(SIZEOF_BIN_SIZE, True)
                 self.packet_size = bin_to_size(header)
                 if self.packet_size < 0:
-                    raise SnakeMQBadPacket("wrong packet header")
+                    raise SnakeMQBrokenPacket("wrong packet header")
             else:
                 if self.size < self.packet_size:
                     # wait for more data
@@ -146,7 +146,7 @@ class Packeter(object):
         recv_buffer.put(buf)
         try:
             packets = recv_buffer.get_packets()
-        except SnakeMQBadPacket, exc:
+        except SnakeMQBrokenPacket, exc:
             self.log.error("conn=%s %r" % (conn_id, exc))
             if self.on_error:
                 self.on_error(conn_id, exc)

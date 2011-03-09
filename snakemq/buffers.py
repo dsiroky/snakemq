@@ -31,7 +31,7 @@ class BufferTooLarge(BufferException):
 
 class StreamBuffer(object):
     def __init__(self):
-        self.size = 0 # current size of the buffer
+        self.size = 0 #: current size of the buffer
         self.max_size = None
         self.queue = deque()
         self.not_full_cond = threading.Condition()
