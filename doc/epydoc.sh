@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export PYTHONPATH=..:$PYTHONPATH
+export PYTHONPATH=..:../tests:$PYTHONPATH
 
 rm -Rf doc/epydoc/*
 epydoc --config epydoc.conf
