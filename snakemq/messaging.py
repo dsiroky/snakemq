@@ -16,8 +16,11 @@ Payload
 
 import struct
 import logging
+import threading
+import uuid
 
 from snakemq.exceptions import SnakeMQBrokenMessage, SnakeMQException
+from snakemq.queues import QueuesManager, Message
 import snakemq.version
 
 ############################################################################
@@ -41,10 +44,11 @@ MESSAGE_FLAG_PERSISTENT = 0x1 #: deliver at all cost (queue to disk as well)
 #############################################################################
 
 class Messaging(object):
-    def __init__(self, identifier, domain, packeter):
+    def __init__(self, identifier, domain, packeter, queues_storage=None):
         self.identifier = identifier
         self.domain = domain
         self.packeter = packeter
+        self.queues_manager = QueuesManager(queues_storage)
         self.log = logging.getLogger("snakemq.messaging")
 
         # callbacks
@@ -59,6 +63,8 @@ class Messaging(object):
         packeter.on_disconnect = self._on_disconnect
         packeter.on_packet_recv = self._on_packet_recv
 
+        self._lock = threading.Lock()
+
     ###########################################################
 
     def _on_connect(self, conn_id):
@@ -70,6 +76,8 @@ class Messaging(object):
     def _on_disconnect(self, conn_id):
         if conn_id in self._ident_by_conn:
             ident = self._ident_by_conn.pop(conn_id)
+            with self._lock:
+                self.queues_manager.get_queue(ident).disconnect()
             del self._conn_by_ident[ident]
 
     ###########################################################
@@ -95,17 +103,23 @@ class Messaging(object):
 
     def parse_identification(self, remote_ident, conn_id):
         self.log.debug("conn=%s remote ident '%s'" % (conn_id, remote_ident))
+        with self._lock:
+            self.queues_manager.get_queue(remote_ident).connect()
         self._ident_by_conn[conn_id] = remote_ident
         self._conn_by_ident[remote_ident] = conn_id
 
     ###########################################################
 
-    def parse_mess(self, payload, conn_id):
+    def parse_message(self, payload, conn_id):
         if len(payload) < FRAME_FORMAT_MESSAGE_SIZE:
             raise SnakeMQBrokenMessage("message")
 
-        uuid, ttl, flags = struct.unpack(FRAME_FORMAT_MESSAGE)
-        print uuid, ttl, flags
+        uuid, ttl, flags = struct.unpack(FRAME_FORMAT_MESSAGE,
+                                          payload[:FRAME_FORMAT_MESSAGE_SIZE])
+        if self.on_message_recv:
+            message = Message(data=payload[FRAME_FORMAT_MESSAGE_SIZE:],
+                              uuid=uuid, ttl=ttl, flags=flags)
+            self.on_message_recv(conn_id, self._ident_by_conn[conn_id], message)
 
     ###########################################################
 
@@ -118,6 +132,7 @@ class Messaging(object):
             payload = packet[1:]
             del packet
 
+            # TODO allow parse_* calls only after protocol version negotiation
             if frame_type == FRAME_TYPE_PROTOCOL_VERSION:
                 self.parse_protocol_version(payload, conn_id)
             elif frame_type == FRAME_TYPE_INCOMPATIBLE_PROTOCOL:
@@ -159,36 +174,30 @@ class Messaging(object):
         self.packeter.send_packet(conn_id,
             FRAME_TYPE_MESSAGE +
             struct.pack(FRAME_FORMAT_MESSAGE,
-                        message.uuid.bytes,
+                        message.uuid,
                         message.ttl,
                         message.flags) +
             message.data)
 
     ###########################################################
 
-    def get_route(self, ident):
-        """
-        @return: conn_id
-        @raise SnakeMQUnknownRoute:
-        """
-        try:
-            return self._conn_by_ident[ident]
-        except KeyError:
-            raise snakemq.exceptions.SnakeMQUnknownRoute(ident)
-
-    ###########################################################
-
     def on_link_loop_pass(self):
-        #print "aa"
-        pass
+        for ident, conn_id in self._conn_by_ident.items():
+            with self._lock:
+                queue = self.queues_manager.get_queue(ident)
+                if len(queue) == 0:
+                    continue
+                item = queue.get()
+                queue.pop()
+                self.send_message_frame(conn_id, item)
 
     ###########################################################
 
-    def send_message(self, ident, message, ttl=None, flags=0):
+    def send_message(self, ident, message):
         """
         @param ident: destination address
-        @param message: any string
-        @param ttl:
-        @param flags:
+        @param message: L{Message}
         """
-        conn_id = self.get_route(ident)
+        assert isinstance(message, Message)
+        with self._lock:
+            self.queues_manager.get_queue(ident).push(message)

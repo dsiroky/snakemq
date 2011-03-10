@@ -1,27 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-Queues and persistent storage. TTL is decreased only by the disconnected time.
-Queue manager "downtime" is not included.
+Queues and persistent storage. TTL is decreased only by the
+disconnected time.  Queue manager "downtime" is not included.
 """
 
 import time
 import bisect
 import sqlite3
 
-###########################################################################
-###########################################################################
-
-FLAG_PERSISTENT = 0x1
-
-###########################################################################
-###########################################################################
-
-class Item(object):
-    def __init__(self, uuid, data, ttl=0, flags=0):
-        self.uuid = uuid
-        self.data = data
-        self.ttl = ttl
-        self.flags = flags
+from snakemq.message import Message, FLAG_PERSISTENT
 
 ###########################################################################
 ###########################################################################
@@ -32,14 +19,22 @@ class Queue(object):
         self.manager = manager
         self.queue = []
         self.last_disconnect_absolute = None
+        self.connected = False
 
-        self.load_persistent_data()
+        if manager.storage:
+            self.load_persistent_data()
         self.disconnect()
+
+    ####################################################
 
     def load_persistent_data(self):
         self.queue[:] = self.manager.storage.get_items(self.name)            
 
+    ####################################################
+
     def connect(self):
+        self.connected = True
+
         # remove outdated items and update TTL
         diff = time.time() - self.last_disconnect_absolute
         fresh_queue = []
@@ -54,22 +49,35 @@ class Queue(object):
             else:
                 if item.flags & FLAG_PERSISTENT:
                     storage_to_delete.append(item)
-        
-        self.manager.storage.update_items_ttl(storage_update_ttls)
-        self.manager.storage.delete_items(storage_to_delete)
+        if self.manager.storage:
+            self.manager.storage.update_items_ttl(storage_update_ttls)
+            self.manager.storage.delete_items(storage_to_delete)
         self.queue[:] = fresh_queue
 
+    ####################################################
+
     def disconnect(self):
+        self.connected = False
         self.last_disconnect_absolute = time.time()
 
+    ####################################################
+
     def push(self, item):
+        if (item.ttl <= 0) and not self.connected:
+            # do not queue already obsolete items
+            return
         self.queue.append(item)
-        if item.flags & FLAG_PERSISTENT:
+        if ((item.flags & FLAG_PERSISTENT) and (item.ttl > 0) and 
+                self.manager.storage):
+            # no need to store items with no TTL
             self.manager.storage.push(self.name, item)
         
+    ####################################################
+
     def get(self):
         """
-        Get first item but do not remove it. Items are not outdated.
+        Get first item but do not remove it. Use {Queue.pop()} to remove it
+        e.g. after successful delivery. Items are always "fresh".
         @return: item or None if empty
         """
         # no need to test TTL because it is filtered in connect()
@@ -77,6 +85,8 @@ class Queue(object):
             return self.queue[0]
         else:
             return None
+
+    ####################################################
 
     def pop(self):
         """
@@ -86,8 +96,10 @@ class Queue(object):
         if not self.queue:
             return
         item = self.queue.pop(0)
-        if item.flags & FLAG_PERSISTENT:
+        if (item.flags & FLAG_PERSISTENT) and self.manager.storage:
             self.manager.storage.delete_items([item])
+
+    ####################################################
 
     def __len__(self):
         return len(self.queue)
@@ -98,15 +110,20 @@ class Queue(object):
 class QueuesManager(object):
     def __init__(self, storage):
         """
-        @param storage: persistent storage
+        @param storage: None or persistent storage
         """
         self.storage = storage
         self.queues = {} #: name:Queue
-        self.load_from_storage()
+        if storage:
+            self.load_from_storage()
+
+    ####################################################
 
     def load_from_storage(self):
         for queue_name in self.storage.get_queues():
             self.get_queue(queue_name)
+
+    ####################################################
 
     def get_queue(self, queue_name):
         """
@@ -119,6 +136,8 @@ class QueuesManager(object):
             self.queues[queue_name] = queue
         return queue
 
+    ####################################################
+
     def cleanup(self):
         """
         remove empty queues
@@ -127,13 +146,26 @@ class QueuesManager(object):
             if not queue:
                 del self.queues[queue_name]
 
+    ####################################################
+
     def close(self):
         """
         Delete queues and close persistent storage.
         """
         self.queues.clear()
-        self.storage.close()
-        self.storage = None
+        if self.storage:
+            self.storage.close()
+            self.storage = None
+
+    ####################################################
+
+    def collect_garbage(self):
+        """
+        Call this periodically to remove obsolete items and empty queues.
+        """
+        # TODO
+
+    ####################################################
 
     def __len__(self):
         return len(self.queues)
@@ -148,9 +180,7 @@ class SqliteQueuesStorage(object):
         self.test_format()
         self.sweep()
     
-    def close(self):
-        self.crs.close()
-        self.conn.close()
+    ####################################################
 
     def test_format(self):
         """
@@ -161,17 +191,26 @@ class SqliteQueuesStorage(object):
         if self.crs.fetchone()[0] != 1:
             self.prepare_format()
 
+    ####################################################
+
     def prepare_format(self):
         self.crs.execute("""CREATE TABLE items (queue_name TEXT, uuid TEXT,
-                                                data TEXT, ttl REAL,
-                                                flags INTEGER)""")
+                                        data TEXT, ttl REAL, flags INTEGER)""")
         self.conn.commit()
+
+    ####################################################
 
     def sweep(self):
         self.crs.execute("""VACUUM""")
         self.conn.commit()
 
-    #######################################################
+    ####################################################
+
+    def close(self):
+        self.crs.close()
+        self.conn.close()
+
+    ####################################################
 
     def get_queues(self):
         """
@@ -179,6 +218,8 @@ class SqliteQueuesStorage(object):
         """
         self.crs.execute("""SELECT queue_name FROM items GROUP BY queue_name""")
         return [r[0] for r in self.crs.fetchall()]
+
+    ####################################################
 
     def get_items(self, queue_name):
         """
@@ -189,8 +230,13 @@ class SqliteQueuesStorage(object):
                           (queue_name,))
         items = []
         for res in self.crs.fetchall():
-            items.append(Item(res[0].decode("base64"), res[1], res[2], res[3]))
+            items.append(Message(uuid=res[0].decode("base64"), 
+                                data=res[1],
+                                ttl=res[2],
+                                flags=res[3]))
         return items
+
+    ####################################################
 
     def push(self, queue_name, item):
         self.crs.execute("""INSERT INTO items
@@ -200,12 +246,16 @@ class SqliteQueuesStorage(object):
                       item.ttl, item.flags))
         self.conn.commit()
 
+    ####################################################
+
     def delete_items(self, items):
         # TODO use SQL operator "IN"
         for item in items:
             self.crs.execute("""DELETE FROM items WHERE uuid = ?""", 
                               (item.uuid.encode("base64"),))
         self.conn.commit()
+
+    ####################################################
 
     def update_items_ttl(self, items):
         for item in items:

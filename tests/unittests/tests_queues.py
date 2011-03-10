@@ -4,8 +4,8 @@ import os
 
 from mocker import Mocker
 
-from snakemq.queues import (SqliteQueuesStorage, QueuesManager, Item,
-                            FLAG_PERSISTENT)
+from snakemq.queues import SqliteQueuesStorage, QueuesManager
+from snakemq.message import Message, FLAG_PERSISTENT
 
 import utils
 
@@ -41,8 +41,9 @@ class TestQueue(utils.TestCase):
         Few puts, few gets, no TTL or persistency
         """
         queue = self.queues_manager.get_queue("testqueue")
-        queue.push(Item("a", "data a"))
-        queue.push(Item("b", "data b"))
+        queue.connect()
+        queue.push(Message("data a", "a"))
+        queue.push(Message("data b", "b"))
         self.assertEqual(len(queue), 2)
         self.assertEqual(queue.get().uuid, "a")
         self.assertEqual(queue.get().uuid, "a") # must be the same
@@ -60,7 +61,6 @@ class TestQueue(utils.TestCase):
         Push 2 items, one will expire on connect.
         """
         queue = self.queues_manager.get_queue("testqueue")
-
         mocker = Mocker()
         obj = mocker.replace("time.time")
         obj()
@@ -69,11 +69,27 @@ class TestQueue(utils.TestCase):
         mocker.result(3)
         with mocker:
             queue.disconnect()
-            queue.push(Item("a", "data a", ttl=1))
-            queue.push(Item("b", "data b", ttl=5))
+            queue.push(Message("data a", "a", ttl=1))
+            queue.push(Message("data b", "b", ttl=5))
             queue.connect()
             self.assertEqual(len(queue), 1)
             self.assertEqual(queue.get().uuid, "b")
+
+    ##################################################################
+
+    def test_zero_ttl(self):
+        """
+        Push item with ttl=0 into a connected or disconnected queue.
+        """
+        queue = self.queues_manager.get_queue("testqueue")
+
+        # disconnected
+        queue.push(Message("data a", "a", ttl=0))
+        self.assertEqual(len(queue), 0)
+
+        queue.connect()
+        queue.push(Message("data a", "a", ttl=0))
+        self.assertEqual(len(queue), 1)
 
     ##################################################################
 
@@ -82,9 +98,10 @@ class TestQueue(utils.TestCase):
         Without TTL.
         """
         queue = self.queues_manager.get_queue("testqueue")
-        queue.push(Item("a", "data a", flags=FLAG_PERSISTENT))
-        queue.push(Item("b", "data b"))
-        queue.push(Item("c", "data c", flags=FLAG_PERSISTENT))
+        queue.connect()
+        queue.push(Message("data a", "a", ttl=1, flags=FLAG_PERSISTENT))
+        queue.push(Message("data b", "b"))
+        queue.push(Message("data c", "c", ttl=1, flags=FLAG_PERSISTENT))
         self.assertEqual(len(queue), 3)
         stored_items = self.queues_manager.storage.get_items("testqueue")
         self.assertEqual(len(stored_items), 2)
@@ -109,12 +126,14 @@ class TestQueue(utils.TestCase):
         Test of persistent items load.
         """
         queue1 = self.queues_manager.get_queue("testqueue1")
-        queue1.push(Item("a", "data a", flags=FLAG_PERSISTENT))
-        queue1.push(Item("b", "data b", flags=FLAG_PERSISTENT))
-        queue1.push(Item("c", "data c", flags=FLAG_PERSISTENT))
+        queue1.connect()
+        queue1.push(Message("data a", "a", ttl=1, flags=FLAG_PERSISTENT))
+        queue1.push(Message("data b", "b", ttl=1, flags=FLAG_PERSISTENT))
+        queue1.push(Message("data c", "c", ttl=1, flags=FLAG_PERSISTENT))
         queue2 = self.queues_manager.get_queue("testqueue2")
-        queue2.push(Item("d", "data d", flags=FLAG_PERSISTENT))
-        queue2.push(Item("e", "data e", flags=FLAG_PERSISTENT))
+        queue2.connect()
+        queue2.push(Message("data d", "d", ttl=1, flags=FLAG_PERSISTENT))
+        queue2.push(Message("data e", "e", ttl=1, flags=FLAG_PERSISTENT))
 
         self.queue_manager_restart()
 
@@ -130,9 +149,11 @@ class TestQueue(utils.TestCase):
 
     def test_persistency_ttl(self):
         queue = self.queues_manager.get_queue("testqueue")
-        queue.push(Item("a", "data a", ttl=1, flags=FLAG_PERSISTENT))
-        queue.push(Item("b", "data b"))
-        queue.push(Item("c", "data c", ttl=5, flags=FLAG_PERSISTENT))
+        queue.connect()
+        queue.push(Message("data a", "a", ttl=1, flags=FLAG_PERSISTENT))
+        queue.push(Message("data b", "b"))
+        queue.push(Message("data c", "c", ttl=5, flags=FLAG_PERSISTENT))
+        self.assertEqual(len(queue), 3)
 
         self.queue_manager_restart()
         queue = self.queues_manager.get_queue("testqueue")
