@@ -1,6 +1,10 @@
 #!/usr/bin/python
 """
 Send many small packets over a single connection.
+
+@author: David Siroky (siroky@dasir.cz)
+@license: MIT License (see LICENSE.txt or 
+          U{http://www.opensource.org/licenses/mit-license.php})
 """
 
 import time

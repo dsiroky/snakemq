@@ -4,6 +4,8 @@ Packet format: C{[4B size|payload]}, size is bytes count (unsigned integer in
 network order) of all following packet data.
 
 @author: David Siroky (siroky@dasir.cz)
+@license: MIT License (see LICENSE.txt or 
+          U{http://www.opensource.org/licenses/mit-license.php})
 """
 
 import logging

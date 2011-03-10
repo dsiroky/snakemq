@@ -1,6 +1,10 @@
 #!/usr/bin/python
 """
 High amount of parallel connections.
+
+@author: David Siroky (siroky@dasir.cz)
+@license: MIT License (see LICENSE.txt or 
+          U{http://www.opensource.org/licenses/mit-license.php})
 """
 
 import time

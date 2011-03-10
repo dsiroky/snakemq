@@ -2,6 +2,10 @@
 """
 Queues and persistent storage. TTL is decreased only by the
 disconnected time.  Queue manager "downtime" is not included.
+
+@author: David Siroky (siroky@dasir.cz)
+@license: MIT License (see LICENSE.txt or 
+          U{http://www.opensource.org/licenses/mit-license.php})
 """
 
 import time

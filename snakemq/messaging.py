@@ -12,6 +12,8 @@ Payload
 - message: C{[16B UUID|4B TTL|4B flags|message]}
 
 @author: David Siroky (siroky@dasir.cz)
+@license: MIT License (see LICENSE.txt or 
+          U{http://www.opensource.org/licenses/mit-license.php})
 """
 
 import struct
