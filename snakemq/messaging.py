@@ -20,6 +20,7 @@ import struct
 import logging
 import threading
 import uuid
+import re
 
 from snakemq.exceptions import SnakeMQBrokenMessage, SnakeMQException
 from snakemq.queues import QueuesManager, Message
@@ -56,6 +57,8 @@ class Messaging(object):
         # callbacks
         self.on_error = None #: C{func(conn_id, exception)}
         self.on_message_recv = None #: C{func(conn_id, ident, message)}
+        self.on_connect = None #: C{func(conn_id, ident)}
+        self.on_disconnect = None #: C{func(conn_id, ident)}
 
         self._ident_by_conn = {}
         self._conn_by_ident = {}
@@ -76,11 +79,15 @@ class Messaging(object):
     ###########################################################
 
     def _on_disconnect(self, conn_id):
-        if conn_id in self._ident_by_conn:
-            ident = self._ident_by_conn.pop(conn_id)
-            with self._lock:
-                self.queues_manager.get_queue(ident).disconnect()
-            del self._conn_by_ident[ident]
+        if conn_id not in self._ident_by_conn:
+            return
+
+        ident = self._ident_by_conn.pop(conn_id)
+        with self._lock:
+            self.queues_manager.get_queue(ident).disconnect()
+        del self._conn_by_ident[ident]
+        if self.on_disconnect:
+            self.on_disconnect(conn_id, ident)
 
     ###########################################################
 
@@ -105,10 +112,17 @@ class Messaging(object):
 
     def parse_identification(self, remote_ident, conn_id):
         self.log.debug("conn=%s remote ident '%s'" % (conn_id, remote_ident))
+
+        if conn_id in self._ident_by_conn:
+            # avoid multiple identifications
+            return
+
         with self._lock:
             self.queues_manager.get_queue(remote_ident).connect()
         self._ident_by_conn[conn_id] = remote_ident
         self._conn_by_ident[remote_ident] = conn_id
+        if self.on_connect:
+            self.on_connect(conn_id, remote_ident)
 
     ###########################################################
 
@@ -203,3 +217,53 @@ class Messaging(object):
         assert isinstance(message, Message)
         with self._lock:
             self.queues_manager.get_queue(ident).push(message)
+
+#############################################################################
+#############################################################################
+
+class ReceiveHook(object):
+    """
+    Received messages are classified by regexp. Appropriate callbacks are
+    called.
+    """
+
+    def __init__(self, messaging):
+        self.messaging = messaging
+        #: regexp:(compiled_regexp, callback)
+        self._hooks = {}
+
+        messaging.on_message_recv = self._on_message_receive
+
+    ###########################################################
+
+    def register(self, regexp, callback):
+        """
+        @param regexp:
+        @param callback: L{Messaging.on_message_recv}
+        """
+        self._hooks[regexp] = (re.compile(regexp), callback)
+
+    ###########################################################
+
+    def unregister(self, regexp):
+        del self._hooks[regexp]
+
+    ###########################################################
+
+    def clear(self):
+        self._hooks.clear()
+
+    ###########################################################
+
+    def _get_callbacks(self, txt):
+        """
+        @return: all callbacks that matches
+        """
+        return [callback for regexp, callback in self._hooks.values()
+                                            if regexp.match(txt)]
+
+    ###########################################################
+
+    def _on_message_receive(self, conn_id, ident, message):
+        for callback in self._get_callbacks(message.data):
+            callback(conn_id, ident, message)

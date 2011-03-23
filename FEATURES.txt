@@ -1,0 +1,8 @@
+- pure python
+- symetrical
+- asynchronous
+- auto-reconnect
+- brokerless
+- reactor pattern
+- stackable
+- flexible topology
