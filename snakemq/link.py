@@ -14,6 +14,8 @@ import time
 import bisect
 import logging
 
+from snakemq.callbacks import Callback
+
 ############################################################################
 ############################################################################
 
@@ -32,20 +34,20 @@ class Link(object):
     and L{on_loop_pass}.
     """
 
+    #{ callbacks
+    on_connect = Callback() #: C{func(conn_id)}
+    on_disconnect = Callback() #: C{func(conn_id)}
+    on_recv = Callback() #: C{func(conn_id, data)}
+    on_ready_to_send = Callback() #: C{func(conn_id)}, last send was successful
+    on_loop_pass = Callback() #: C{func()}, called after poll is processed
+    #}
+
     def __init__(self):
         self.log = logging.getLogger("snakemq.link")
 
         self.reconnect_interval = RECONNECT_INTERVAL #: in seconds
         self.recv_block_size = RECV_BLOCK_SIZE
 
-        #{ callbacks
-        self.on_connect = None #: C{func(conn_id)}
-        self.on_disconnect = None #: C{func(conn_id)}
-        self.on_recv = None #: C{func(conn_id, data)}
-        self.on_ready_to_send = None #: C{func(conn_id)}, last send was successful
-        self.on_loop_pass = None #: C{func()}, called after poll is processed
-        #}
-        
         self._do_loop = False #: False breaks the loop
 
         self._new_conn_id = 0 #: counter for conn id generator
@@ -230,8 +232,7 @@ class Link(object):
                 not ((runtime is not None) and
                       (time.time() - time_start > runtime))):
             is_event = len(self.loop_pass(poll_timeout))
-            if self.on_loop_pass:
-                self.on_loop_pass()
+            self.on_loop_pass()
             if is_event and (count is not None):
                 count -= 1
 
@@ -306,8 +307,7 @@ class Link(object):
 
         conn_id = self.new_connection_id(sock)
         self.log.info("connect %s %r" % (conn_id, sock.getpeername()))
-        if self.on_connect:
-            self.on_connect(conn_id)
+        self.on_connect(conn_id)
 
     ##########################################################
 
@@ -323,8 +323,7 @@ class Link(object):
 
         conn_id = self.new_connection_id(newsock)
         self.log.info("accept %s %r" % (conn_id, address))
-        if self.on_connect:
-            self.on_connect(conn_id)
+        self.on_connect(conn_id)
 
     ##########################################################
 
@@ -336,8 +335,7 @@ class Link(object):
             fragment = sock.recv(self.recv_block_size)
             if fragment:
                 self.log.debug("recv %s len=%i" % (conn_id, len(fragment)))
-                if self.on_recv:
-                    self.on_recv(conn_id, fragment)
+                self.on_recv(conn_id, fragment)
             else:
                 self.handle_close(sock)
         except socket.error, exc:
@@ -373,8 +371,7 @@ class Link(object):
             conn_id = self._conn_by_sock[sock]
             self.del_connection_id(sock)
             self.log.info("disconnect %s " % conn_id)
-            if self.on_disconnect:
-                self.on_disconnect(conn_id)
+            self.on_disconnect(conn_id)
 
         if sock in self._socks_addresses:
             address = self._socks_addresses.pop(sock)
@@ -388,8 +385,7 @@ class Link(object):
         self.poller.modify(sock, select.EPOLLIN)
         conn_id = self._conn_by_sock[sock]
         self.log.debug("ready to send " + conn_id)
-        if self.on_ready_to_send:
-            self.on_ready_to_send(conn_id)
+        self.on_ready_to_send(conn_id)
 
     ##########################################################
 

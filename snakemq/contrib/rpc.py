@@ -169,13 +169,17 @@ class RpcClient(object):
     def __init__(self, remote_ident, receive_hook):
         self.remote_ident = remote_ident
         self.receive_hook = receive_hook
-        receive_hook.register(MESSAGE_PREFIX, self.on_recv)
         self.method_proxies = {}
         self.exception_handler = None
         self.remote_tb = None
         self.results = {}
         self.lock = threading.Lock()
         self.cond = threading.Condition(self.lock)
+        self.connected = False
+
+        receive_hook.register(MESSAGE_PREFIX, self.on_recv)
+        receive_hook.messaging.on_connect = self.on_connect
+        receive_hook.messaging.on_disconnect = self.on_disconnect
     
     ######################################################
 
@@ -186,7 +190,27 @@ class RpcClient(object):
 
     ######################################################
 
+    def on_connect(self, conn_id, ident):
+        if ident != self.remote_ident:
+            return
+        with self.cond:
+            self.connected = True
+            self.cond.notify_all()
+
+    ######################################################
+
+    def on_disconnect(self, conn_id, ident):
+        if ident != self.remote_ident:
+            return
+        with self.cond:
+            self.connected = False
+            self.cond.notify_all()
+
+    ######################################################
+
     def on_recv(self, conn_id, ident, message):
+        if ident != self.remote_ident:
+            return
         res = pickle.loads(message.data[len(MESSAGE_PREFIX):])
         with self.cond:
             self.results[res["req_id"]] = res
@@ -195,12 +219,20 @@ class RpcClient(object):
     ######################################################
 
     def remote_request(self, params):
+        req_id = params["req_id"]
+
+        # repeat request until it is replied
         with self.cond:
-            req_id = params["req_id"]
-            self.send_params(params)
-            while req_id not in self.results:
-                self.cond.wait()
-            res = self.results[req_id]
+            while True:
+                if self.connected:
+                    self.send_params(params)
+                    while (req_id not in self.results) and self.connected:
+                        self.cond.wait()
+                if self.connected:
+                    res = self.results[req_id]
+                    break
+                else:
+                    self.cond.wait() # for signal from connect/di
         
         if res["ok"]:
             return res["return"]

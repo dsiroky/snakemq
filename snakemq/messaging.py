@@ -24,6 +24,7 @@ import re
 
 from snakemq.exceptions import SnakeMQBrokenMessage, SnakeMQException
 from snakemq.queues import QueuesManager, Message
+from snakemq.callbacks import Callback
 import snakemq.version
 
 ############################################################################
@@ -47,18 +48,19 @@ MESSAGE_FLAG_PERSISTENT = 0x1 #: deliver at all cost (queue to disk as well)
 #############################################################################
 
 class Messaging(object):
+    #{ callbacks
+    on_error = Callback() #: C{func(conn_id, exception)}
+    on_message_recv = Callback() #: C{func(conn_id, ident, message)}
+    on_connect = Callback() #: C{func(conn_id, ident)}
+    on_disconnect = Callback() #: C{func(conn_id, ident)}
+    #}
+
     def __init__(self, identifier, domain, packeter, queues_storage=None):
         self.identifier = identifier
         self.domain = domain
         self.packeter = packeter
         self.queues_manager = QueuesManager(queues_storage)
         self.log = logging.getLogger("snakemq.messaging")
-
-        # callbacks
-        self.on_error = None #: C{func(conn_id, exception)}
-        self.on_message_recv = None #: C{func(conn_id, ident, message)}
-        self.on_connect = None #: C{func(conn_id, ident)}
-        self.on_disconnect = None #: C{func(conn_id, ident)}
 
         self._ident_by_conn = {}
         self._conn_by_ident = {}
@@ -86,8 +88,7 @@ class Messaging(object):
         with self._lock:
             self.queues_manager.get_queue(ident).disconnect()
         del self._conn_by_ident[ident]
-        if self.on_disconnect:
-            self.on_disconnect(conn_id, ident)
+        self.on_disconnect(conn_id, ident)
 
     ###########################################################
 
@@ -121,8 +122,7 @@ class Messaging(object):
             self.queues_manager.get_queue(remote_ident).connect()
         self._ident_by_conn[conn_id] = remote_ident
         self._conn_by_ident[remote_ident] = conn_id
-        if self.on_connect:
-            self.on_connect(conn_id, remote_ident)
+        self.on_connect(conn_id, remote_ident)
 
     ###########################################################
 
@@ -132,10 +132,9 @@ class Messaging(object):
 
         uuid, ttl, flags = struct.unpack(FRAME_FORMAT_MESSAGE,
                                           payload[:FRAME_FORMAT_MESSAGE_SIZE])
-        if self.on_message_recv:
-            message = Message(data=payload[FRAME_FORMAT_MESSAGE_SIZE:],
-                              uuid=uuid, ttl=ttl, flags=flags)
-            self.on_message_recv(conn_id, self._ident_by_conn[conn_id], message)
+        message = Message(data=payload[FRAME_FORMAT_MESSAGE_SIZE:],
+                          uuid=uuid, ttl=ttl, flags=flags)
+        self.on_message_recv(conn_id, self._ident_by_conn[conn_id], message)
 
     ###########################################################
 
@@ -160,8 +159,7 @@ class Messaging(object):
         except SnakeMQException, exc:
             self.log.error("conn=%s ident=%s %r" % 
                   (conn_id, self._ident_by_conn.get(conn_id), exc))
-            if self.on_error:
-                self.on_error(conn_id, exc)
+            self.on_error(conn_id, exc)
             self.packeter.link.close(conn_id)
 
     ###########################################################

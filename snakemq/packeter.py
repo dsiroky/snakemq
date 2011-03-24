@@ -14,6 +14,7 @@ from collections import deque
 
 from snakemq.buffers import StreamBuffer
 from snakemq.exceptions import SnakeMQBrokenPacket
+from snakemq.callbacks import Callback
 
 ############################################################################
 ############################################################################
@@ -84,17 +85,17 @@ class ConnectionInfo(object):
 ############################################################################
 
 class Packeter(object):
+    # callbacks
+    on_connect = Callback() #: C{func(conn_id)}
+    on_disconnect = Callback() #: C{func(conn_id)}
+    on_packet_recv = Callback() #: C{func(conn_id, packet)}
+    #: C{func(conn_id, packet_id)}, just a signal when a packet was fully sent
+    on_packet_sent = Callback()
+    on_error = Callback() #: C{func(conn_id, exception)}
+
     def __init__(self, link):
         self.link = link
         self.log = logging.getLogger("snakemq.packeter")
-
-        # callbacks
-        self.on_connect = None #: C{func(conn_id)}
-        self.on_disconnect = None #: C{func(conn_id)}
-        self.on_packet_recv = None #: C{func(conn_id, packet)}
-        #: C{func(conn_id, packet_id)}, just a signal when a packet was fully sent
-        self.on_packet_sent = None
-        self.on_error = None #: C{func(conn_id, exception)}
 
         self._connections = {} # conn_id:ConnectionInfo
         self._queued_packets = deque()
@@ -130,16 +131,14 @@ class Packeter(object):
 
     def _on_connect(self, conn_id):
         self._connections[conn_id] = ConnectionInfo()
-        if self.on_connect:
-            self.on_connect(conn_id)
+        self.on_connect(conn_id)
 
     ###########################################################
 
     def _on_disconnect(self, conn_id):
         # TODO signal unsent data and unreceived data
         del self._connections[conn_id]
-        if self.on_disconnect:
-            self.on_disconnect(conn_id)
+        self.on_disconnect(conn_id)
 
     ###########################################################
 
@@ -150,15 +149,13 @@ class Packeter(object):
             packets = recv_buffer.get_packets()
         except SnakeMQBrokenPacket, exc:
             self.log.error("conn=%s %r" % (conn_id, exc))
-            if self.on_error:
-                self.on_error(conn_id, exc)
+            self.on_error(conn_id, exc)
             self.link.close(conn_id)
             return
 
         for packet in packets:
             self.log.debug("recv packet %s len=%i" % (conn_id, len(packet)))
-            if self.on_packet_recv:
-                self.on_packet_recv(conn_id, packet)
+            self.on_packet_recv(conn_id, packet)
 
     ###########################################################
 
@@ -171,8 +168,7 @@ class Packeter(object):
             while sent_length > 0:
                 first, packet_id = self._queued_packets.popleft()
                 if first <= sent_length:
-                    if self.on_packet_sent:
-                        self.on_packet_sent(conn_id, packet_id)
+                    self.on_packet_sent(conn_id, packet_id)
                 else:
                     self._queued_packets.appendleft((first - sent_length,
                                                     packet_id))
