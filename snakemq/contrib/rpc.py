@@ -229,11 +229,12 @@ class RpcClient(object):
         # repeat request until it is replied
         with self.cond:
             while True:
-                if self.connected:
+                if self.connected.get(remote_ident):
                     self.send_params(remote_ident, params)
-                    while (req_id not in self.results) and self.connected:
+                    while ((req_id not in self.results) and 
+                              self.connected.get(remote_ident)):
                         self.cond.wait(WAIT_TIMEOUT)
-                if self.connected:
+                if self.connected.get(remote_ident):
                     res = self.results[req_id]
                     break
                 else:
