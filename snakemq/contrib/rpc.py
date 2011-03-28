@@ -18,7 +18,8 @@ from snakemq.message import Message
 # constants
 ###############################################################################
 
-MESSAGE_PREFIX = "rpc"
+REQUEST_PREFIX = "rpcreq"
+REPLY_PREFIX = "rpcrep"
 
 ###############################################################################
 ###############################################################################
@@ -52,7 +53,7 @@ class RunError(Error):
 class RpcServer(object):
     def __init__(self, receive_hook):
         self.receive_hook = receive_hook
-        receive_hook.register(MESSAGE_PREFIX, self.on_recv)
+        receive_hook.register(REQUEST_PREFIX, self.on_recv)
         self.instances = {}
         self.raise_remote_exception = True # raise RunError or the real exception
 
@@ -65,7 +66,7 @@ class RpcServer(object):
 
     def on_recv(self, conn_id, ident, message):
         try:
-            params = pickle.loads(message.data[len(MESSAGE_PREFIX):])
+            params = pickle.loads(message.data[len(REQUEST_PREFIX):])
             cmd = params["command"]
             if cmd == "call":
                 self.call_method(ident, params)
@@ -111,7 +112,7 @@ class RpcServer(object):
 
     def send(self, ident, data):
         data = pickle.dumps(data)
-        message = Message(data=MESSAGE_PREFIX + data)
+        message = Message(data=REPLY_PREFIX + data)
         self.receive_hook.messaging.send_message(ident, message)
         
 ###############################################################################
@@ -177,7 +178,7 @@ class RpcClient(object):
         self.cond = threading.Condition(self.lock)
         self.connected = False
 
-        receive_hook.register(MESSAGE_PREFIX, self.on_recv)
+        receive_hook.register(REPLY_PREFIX, self.on_recv)
         receive_hook.messaging.on_connect = self.on_connect
         receive_hook.messaging.on_disconnect = self.on_disconnect
     
@@ -185,7 +186,7 @@ class RpcClient(object):
 
     def send_params(self, params):
         raw = pickle.dumps(params)
-        message = Message(data=MESSAGE_PREFIX + raw)
+        message = Message(data=REQUEST_PREFIX + raw)
         self.receive_hook.messaging.send_message(self.remote_ident, message)
 
     ######################################################
@@ -211,7 +212,7 @@ class RpcClient(object):
     def on_recv(self, conn_id, ident, message):
         if ident != self.remote_ident:
             return
-        res = pickle.loads(message.data[len(MESSAGE_PREFIX):])
+        res = pickle.loads(message.data[len(REPLY_PREFIX):])
         with self.cond:
             self.results[res["req_id"]] = res
             self.cond.notify_all()
