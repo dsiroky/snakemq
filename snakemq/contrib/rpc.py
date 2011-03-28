@@ -130,13 +130,13 @@ class RemoteMethod(object):
             params = {
                   "req_id": uuid.uuid1().bytes,
                   "command": "call",
-                  "private": self.iproxy._private,
                   "object": self.iproxy._name,
                   "method": self.name, 
                   "args": args,
                   "kwargs": kwargs
                 }
-            return self.iproxy._client.remote_request(params)
+            ident = self.iproxy._remote_ident
+            return self.iproxy._client.remote_request(ident, params)
         except Exception, e:
             eh = self.iproxy._client.exception_handler
             if eh is None: 
@@ -148,13 +148,13 @@ class RemoteMethod(object):
 #########################################################################
 
 class RpcInstProxy(object):
-    def __init__(self, client, name, private=False):
+    def __init__(self, client, remote_ident, name):
         self._client = client
+        self._remote_ident = remote_ident
         self._name = name
-        self._private = private
 
     def __getattr__(self, name):
-        key = self._name + name
+        key = self._remote_ident + self._name + name
         with self._client.lock:
             if key in self._client.method_proxies:
                 return self._client.method_proxies[key]
@@ -167,8 +167,7 @@ class RpcInstProxy(object):
 #########################################################################
 
 class RpcClient(object):
-    def __init__(self, remote_ident, receive_hook):
-        self.remote_ident = remote_ident
+    def __init__(self, receive_hook):
         self.receive_hook = receive_hook
         self.method_proxies = {}
         self.exception_handler = None
@@ -176,7 +175,7 @@ class RpcClient(object):
         self.results = {}
         self.lock = threading.Lock()
         self.cond = threading.Condition(self.lock)
-        self.connected = False
+        self.connected = {} #: remote_ident:bool
 
         receive_hook.register(REPLY_PREFIX, self.on_recv)
         receive_hook.messaging.on_connect = self.on_connect
@@ -184,34 +183,28 @@ class RpcClient(object):
     
     ######################################################
 
-    def send_params(self, params):
+    def send_params(self, remote_ident, params):
         raw = pickle.dumps(params)
         message = Message(data=REQUEST_PREFIX + raw)
-        self.receive_hook.messaging.send_message(self.remote_ident, message)
+        self.receive_hook.messaging.send_message(remote_ident, message)
 
     ######################################################
 
     def on_connect(self, conn_id, ident):
-        if ident != self.remote_ident:
-            return
         with self.cond:
-            self.connected = True
+            self.connected[ident] = True
             self.cond.notify_all()
 
     ######################################################
 
     def on_disconnect(self, conn_id, ident):
-        if ident != self.remote_ident:
-            return
         with self.cond:
-            self.connected = False
+            self.connected[ident] = False
             self.cond.notify_all()
 
     ######################################################
 
     def on_recv(self, conn_id, ident, message):
-        if ident != self.remote_ident:
-            return
         res = pickle.loads(message.data[len(REPLY_PREFIX):])
         with self.cond:
             self.results[res["req_id"]] = res
@@ -219,14 +212,14 @@ class RpcClient(object):
 
     ######################################################
 
-    def remote_request(self, params):
+    def remote_request(self, remote_ident, params):
         req_id = params["req_id"]
 
         # repeat request until it is replied
         with self.cond:
             while True:
                 if self.connected:
-                    self.send_params(params)
+                    self.send_params(remote_ident, params)
                     while (req_id not in self.results) and self.connected:
                         self.cond.wait()
                 if self.connected:
@@ -244,9 +237,9 @@ class RpcClient(object):
 
     ######################################################
 
-    def get_proxy(self, name):
+    def get_proxy(self, remote_ident, name):
         """
         @return: instance registered with register_object()
         """
-        return RpcInstProxy(self, name)
+        return RpcInstProxy(self, remote_ident, name)
 
