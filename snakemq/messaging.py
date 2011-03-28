@@ -65,7 +65,7 @@ class Messaging(object):
         self._ident_by_conn = {}
         self._conn_by_ident = {}
 
-        packeter.link.on_loop_pass = self.on_link_loop_pass
+        packeter.link.on_loop_pass = self._on_link_loop_pass
         packeter.on_connect = self._on_connect
         packeter.on_disconnect = self._on_disconnect
         packeter.on_packet_recv = self._on_packet_recv
@@ -195,7 +195,7 @@ class Messaging(object):
 
     ###########################################################
 
-    def on_link_loop_pass(self):
+    def _on_link_loop_pass(self):
         for ident, conn_id in self._conn_by_ident.items():
             with self._lock:
                 queue = self.queues_manager.get_queue(ident)
@@ -215,6 +215,7 @@ class Messaging(object):
         assert isinstance(message, Message)
         with self._lock:
             self.queues_manager.get_queue(ident).push(message)
+        self.packeter.link.wakeup_poll()
 
 #############################################################################
 #############################################################################

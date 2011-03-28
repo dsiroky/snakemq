@@ -21,6 +21,8 @@ from snakemq.message import Message
 REQUEST_PREFIX = "rpcreq"
 REPLY_PREFIX = "rpcrep"
 
+WAIT_TIMEOUT = 5
+
 ###############################################################################
 ###############################################################################
 # exceptions
@@ -51,6 +53,11 @@ class RunError(Error):
 ###############################################################################
 
 class RpcServer(object):
+    """
+    Methods of registered objects are called in a different thread other
+    than the link loop.
+    """
+
     def __init__(self, receive_hook):
         self.receive_hook = receive_hook
         receive_hook.register(REQUEST_PREFIX, self.on_recv)
@@ -69,7 +76,11 @@ class RpcServer(object):
             params = pickle.loads(message.data[len(REQUEST_PREFIX):])
             cmd = params["command"]
             if cmd == "call":
-                self.call_method(ident, params)
+                # method must not block link loop
+                thr = threading.Thread(target=self.call_method,
+                                      args=(ident, params))
+                thr.setDaemon(True)
+                thr.start()
         except Exception, e:
             if self.raise_remote_exception:
                 exc = e
@@ -221,12 +232,12 @@ class RpcClient(object):
                 if self.connected:
                     self.send_params(remote_ident, params)
                     while (req_id not in self.results) and self.connected:
-                        self.cond.wait()
+                        self.cond.wait(WAIT_TIMEOUT)
                 if self.connected:
                     res = self.results[req_id]
                     break
                 else:
-                    self.cond.wait() # for signal from connect/di
+                    self.cond.wait(WAIT_TIMEOUT) # for signal from connect/di
         
         if res["ok"]:
             return res["return"]
