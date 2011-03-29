@@ -189,7 +189,7 @@ class Messaging(object):
             FRAME_TYPE_MESSAGE +
             struct.pack(FRAME_FORMAT_MESSAGE,
                         message.uuid,
-                        message.ttl,
+                        int(message.ttl),
                         message.flags) +
             message.data)
 
