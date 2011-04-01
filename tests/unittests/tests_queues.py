@@ -26,6 +26,7 @@ class TestQueue(utils.TestCase):
     def setUp(self):
         if os.path.isfile(STORAGE_FILENAME):
             os.unlink(STORAGE_FILENAME)
+        # TODO mock storage
         storage = SqliteQueuesStorage(STORAGE_FILENAME)
         self.queues_manager = QueuesManager(storage)
 

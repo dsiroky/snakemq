@@ -19,6 +19,8 @@ from tests_buffers import *
 from tests_queues import *
 from tests_messaging import *
 
+#############################################################################
+#############################################################################
+
 if __name__ == "__main__":
-    snakemq.init()
     unittest.main()
