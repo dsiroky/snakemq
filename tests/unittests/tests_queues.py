@@ -9,7 +9,7 @@ import os
 
 from mocker import Mocker
 
-from snakemq.queues import SqliteQueuesStorage, QueuesManager
+from snakemq.queues import MemoryQueuesStorage, SqliteQueuesStorage, QueuesManager
 from snakemq.message import Message, FLAG_PERSISTENT
 
 import utils
@@ -17,18 +17,10 @@ import utils
 ############################################################################
 ############################################################################
 
-STORAGE_FILENAME = "/tmp/snakemq_testqueue.storage"
-
-############################################################################
-############################################################################
-
 class TestQueue(utils.TestCase):
     def setUp(self):
-        if os.path.isfile(STORAGE_FILENAME):
-            os.unlink(STORAGE_FILENAME)
-        # TODO mock storage
-        storage = SqliteQueuesStorage(STORAGE_FILENAME)
-        self.queues_manager = QueuesManager(storage)
+        self.storage = MemoryQueuesStorage()
+        self.queues_manager = QueuesManager(self.storage)
 
     def tearDown(self):
         self.queues_manager.close()
@@ -37,8 +29,7 @@ class TestQueue(utils.TestCase):
 
     def queue_manager_restart(self):
         self.queues_manager.close()
-        storage = SqliteQueuesStorage(STORAGE_FILENAME)
-        self.queues_manager = QueuesManager(storage)
+        self.queues_manager = QueuesManager(self.storage)
 
     ##################################################################
 
@@ -176,3 +167,99 @@ class TestQueue(utils.TestCase):
             queue.connect()
             self.assertEqual(len(queue), 1)
             
+############################################################################
+############################################################################
+
+class TestStorageMixin(object):
+    """
+    Generic tests for L{QueuesStorage} derivatives.
+    """
+    # TODO test delete
+
+    def setUp(self):
+        self.storage = None
+        self.delete_storage()
+        self.storage_factory()
+
+    ####################################################
+
+    def tearDown(self):
+        self.delete_storage()
+
+    ####################################################
+
+    def storage_factory(self):
+        """
+        Open (or create and open) storage.
+        """
+        raise NotImplementedError
+
+    ####################################################
+
+    def delete_storage(self):
+        """
+        Close and delete storage.
+        """
+        raise NotImplementedError
+
+    ####################################################
+
+    def test_persistency(self):
+        self.assertEqual(len(self.storage.get_queues()), 0)
+        self.storage.push("q1", Message("a"))
+        self.assertEqual(len(self.storage.get_queues()), 1)
+        self.assertEqual(len(self.storage.get_items("q2")), 0)
+        self.assertEqual(len(self.storage.get_items("q1")), 1)
+        self.storage.close()
+
+        self.storage_factory()
+        self.assert_(len(self.storage.get_queues()) >= 1)  # at least q1
+        self.assertEqual(len(self.storage.get_items("q2")), 0)
+        self.assertEqual(len(self.storage.get_items("q1")), 1)
+
+    ####################################################
+
+    def test_message_attributes_persistency(self):
+        old_msg = Message("a", ttl=100, flags=1234)
+        self.storage.push("q1", old_msg)
+        self.storage.close()
+
+        self.storage_factory()
+        cur_msg = self.storage.get_items("q1")[0]
+        self.assertEqual(old_msg.data, cur_msg.data)
+        self.assertEqual(old_msg.ttl, cur_msg.ttl)
+        self.assertEqual(old_msg.uuid, cur_msg.uuid)
+        self.assertEqual(old_msg.flags, cur_msg.flags)
+
+############################################################################
+############################################################################
+
+class TestMemoryStorage(TestStorageMixin, utils.TestCase):
+    """
+    Only "fake" persistency can be tested.
+    """
+
+    perm_storage = None  #: fake permanent storage
+
+    def storage_factory(self):
+        TestMemoryStorage.perm_storage = (TestMemoryStorage.perm_storage or 
+                                    MemoryQueuesStorage())
+        self.storage = TestMemoryStorage.perm_storage
+
+    def delete_storage(self):
+        TestMemoryStorage.perm_storage = None
+
+############################################################################
+############################################################################
+
+class TestSqliteStorage(TestStorageMixin, utils.TestCase):
+    STORAGE_FILENAME = "/tmp/snakemq_testqueue.storage"
+
+    def storage_factory(self):
+        self.storage = SqliteQueuesStorage(TestSqliteStorage.STORAGE_FILENAME)
+
+    def delete_storage(self):
+        if self.storage:
+            self.storage.close()
+        if os.path.isfile(TestSqliteStorage.STORAGE_FILENAME):
+            os.unlink(TestSqliteStorage.STORAGE_FILENAME)

@@ -10,15 +10,6 @@ Simple callbacks helper.
 ###########################################################################
 ###########################################################################
 
-def empty(*args, **kwargs):
-    """
-    Dummy default callback.
-    """
-    return None
-
-###########################################################################
-###########################################################################
-
 class CallbackPresent(Exception):
     pass
 
@@ -26,28 +17,28 @@ class CallbackPresent(Exception):
 ###########################################################################
 
 class Callback(object):
-    def __init__(self):
-        self.callbacks_by_obj = {}
+    def __init__(self, single=True):
+        """
+        @param single: if True then only a single callback function can be
+                      assigned.
+        """
+        self.single = single
+        self.callbacks = set()
 
-    def __set__(self, instance, value):
+    ####################################################
+
+    def add(self, func):
         """
         Callback can be set only once.
         @raises CallbackPresent:
         """
-        if instance in self.callbacks_by_obj:
+        if (len(self.callbacks) > 0) and self.single:
             raise CallbackPresent()
-        self.callbacks_by_obj[instance] = value
+        self.callbacks.add(func)
 
-    def __get__(self, instance, owner):
-        cb = self.callbacks_by_obj.get(instance)
-        if cb:
-            return cb
-        else:
-            return empty
+    ####################################################
 
-    def __delete__(self, instance):
-        try:
-            del self.callbacks[instance]
-        except KeyError:
-            pass
+    def __call__(self, *args, **kwargs):
+        for callback in self.callbacks:
+            callback(*args, **kwargs)
 

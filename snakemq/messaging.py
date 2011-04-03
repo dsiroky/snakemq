@@ -48,13 +48,6 @@ MESSAGE_FLAG_PERSISTENT = 0x1 #: deliver at all cost (queue to disk as well)
 #############################################################################
 
 class Messaging(object):
-    #{ callbacks
-    on_error = Callback() #: C{func(conn_id, exception)}
-    on_message_recv = Callback() #: C{func(conn_id, ident, message)}
-    on_connect = Callback() #: C{func(conn_id, ident)}
-    on_disconnect = Callback() #: C{func(conn_id, ident)}
-    #}
-
     def __init__(self, identifier, domain, packeter, queues_storage=None):
         self.identifier = identifier
         self.domain = domain
@@ -62,13 +55,20 @@ class Messaging(object):
         self.queues_manager = QueuesManager(queues_storage)
         self.log = logging.getLogger("snakemq.messaging")
 
+        #{ callbacks
+        self.on_error = Callback(single=False) #: C{func(conn_id, exception)}
+        self.on_message_recv = Callback() #: C{func(conn_id, ident, message)}
+        self.on_connect = Callback(single=False) #: C{func(conn_id, ident)}
+        self.on_disconnect = Callback(single=False) #: C{func(conn_id, ident)}
+        #}
+
         self._ident_by_conn = {}
         self._conn_by_ident = {}
 
-        packeter.link.on_loop_pass = self._on_link_loop_pass
-        packeter.on_connect = self._on_connect
-        packeter.on_disconnect = self._on_disconnect
-        packeter.on_packet_recv = self._on_packet_recv
+        packeter.link.on_loop_pass.add(self._on_link_loop_pass)
+        packeter.on_connect.add(self._on_connect)
+        packeter.on_disconnect.add(self._on_disconnect)
+        packeter.on_packet_recv.add(self._on_packet_recv)
 
         self._lock = threading.Lock()
 

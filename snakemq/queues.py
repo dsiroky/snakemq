@@ -11,10 +11,13 @@ disconnected time.  Queue manager "downtime" is not included.
 import time
 import bisect
 import sqlite3
+from collections import defaultdict, deque
 
 from snakemq.message import Message, FLAG_PERSISTENT
 
 ###########################################################################
+###########################################################################
+# queue
 ###########################################################################
 
 class Queue(object):
@@ -110,6 +113,164 @@ class Queue(object):
 
 ###########################################################################
 ###########################################################################
+# storage
+###########################################################################
+
+class QueuesStorage(object):
+    def close(self):
+        raise NotImplementedError
+
+    def get_queues(self):
+        """
+        @return: list of queues names
+        """
+        raise NotImplementedError
+
+    def get_items(self, queue_name):
+        """
+        @return: items of the queue
+        """
+        raise NotImplementedError
+
+    def push(self, queue_name, item):
+        raise NotImplementedError
+
+    def delete_items(self, items):
+        raise NotImplementedError
+
+    def update_items_ttl(self, items):
+        raise NotImplementedError
+
+###########################################################################
+###########################################################################
+
+class MemoryQueuesStorage(QueuesStorage):
+    """
+    For testing purposes - B{THIS STORAGE IS NOT PERSISTENT.}
+    """
+    def __init__(self):
+        self.queues = defaultdict(deque)  #: name:queue
+
+    def close(self):
+        pass
+
+    def get_queues(self):
+        return self.queues.keys()
+
+    def get_items(self, queue_name):
+        return self.queues[queue_name]
+
+    def push(self, queue_name, item):
+        self.queues[queue_name].append(item)
+
+    def delete_items(self, items):
+        for queue in self.queues.values():
+            for item in items:
+                try:
+                    queue.remove(item)
+                except ValueError:
+                    pass
+
+    def update_items_ttl(self, items):
+        # TTLs are already updated by the caller
+        pass
+
+###########################################################################
+###########################################################################
+
+class SqliteQueuesStorage(QueuesStorage):
+    def __init__(self, filename):
+        self.filename = filename
+        self.conn = sqlite3.connect(self.filename)
+        self.crs = self.conn.cursor()
+        self.test_format()
+        self.sweep()
+
+    ####################################################
+
+    def close(self):
+        if self.crs:
+            self.crs.close()
+            self.crs = None
+        if self.conn:
+            self.conn.close()
+            self.conn = None
+
+    ####################################################
+
+    def test_format(self):
+        """
+        Make sure that the database file content is OK.
+        """
+        self.crs.execute("""SELECT count(1) FROM sqlite_master
+                                  WHERE type='table' AND name='items'""")
+        if self.crs.fetchone()[0] != 1:
+            self.prepare_format()
+
+    ####################################################
+
+    def prepare_format(self):
+        with self.conn:
+            self.crs.execute("""CREATE TABLE items (queue_name TEXT, uuid TEXT,
+                                        data TEXT, ttl REAL, flags INTEGER)""")
+
+    ####################################################
+
+    def sweep(self):
+        with self.conn:
+            self.crs.execute("""VACUUM""")
+
+    ####################################################
+
+    def get_queues(self):
+        self.crs.execute("""SELECT queue_name FROM items GROUP BY queue_name""")
+        return [r[0] for r in self.crs.fetchall()]
+
+    ####################################################
+
+    def get_items(self, queue_name):
+        self.crs.execute("""SELECT uuid, data, ttl, flags FROM items
+                                   WHERE queue_name = ?""",
+                          (queue_name,))
+        items = []
+        for res in self.crs.fetchall():
+            items.append(Message(uuid=res[0].decode("base64"), 
+                                data=res[1],
+                                ttl=res[2],
+                                flags=res[3]))
+        return items
+
+    ####################################################
+
+    def push(self, queue_name, item):
+        with self.conn:
+            self.crs.execute("""INSERT INTO items
+                                    (queue_name, uuid, data, ttl, flags)
+                                    VALUES (?, ?, ?, ?, ?)""",
+                          (queue_name, item.uuid.encode("base64"), item.data,
+                          item.ttl, item.flags))
+
+    ####################################################
+
+    def delete_items(self, items):
+        # TODO use SQL operator "IN"
+        with self.conn:
+            for item in items:
+                self.crs.execute("""DELETE FROM items WHERE uuid = ?""", 
+                              (item.uuid.encode("base64"),))
+
+    ####################################################
+
+    def update_items_ttl(self, items):
+        with self.conn:
+            for item in items:
+                self.crs.execute("""UPDATE items SET ttl = ? WHERE uuid = ?""",
+                          (item.ttl, item.uuid.encode("base64")))
+
+###########################################################################
+###########################################################################
+# manager
+###########################################################################
 
 class QueuesManager(object):
     def __init__(self, storage):
@@ -117,6 +278,7 @@ class QueuesManager(object):
         @param storage: None or persistent storage
         """
         self.storage = storage
+        assert isinstance(storage, QueuesStorage)
         self.queues = {} #: name:Queue
         if storage:
             self.load_from_storage()
@@ -174,95 +336,3 @@ class QueuesManager(object):
     def __len__(self):
         return len(self.queues)
 
-###########################################################################
-###########################################################################
-
-class SqliteQueuesStorage(object):
-    def __init__(self, filename):
-        self.conn = sqlite3.connect(filename)
-        self.crs = self.conn.cursor()
-        self.test_format()
-        self.sweep()
-    
-    ####################################################
-
-    def test_format(self):
-        """
-        Make sure that the database file content is OK.
-        """
-        self.crs.execute("""SELECT count(1) FROM sqlite_master
-                                  WHERE type='table' AND name='items'""")
-        if self.crs.fetchone()[0] != 1:
-            self.prepare_format()
-
-    ####################################################
-
-    def prepare_format(self):
-        self.crs.execute("""CREATE TABLE items (queue_name TEXT, uuid TEXT,
-                                        data TEXT, ttl REAL, flags INTEGER)""")
-        self.conn.commit()
-
-    ####################################################
-
-    def sweep(self):
-        self.crs.execute("""VACUUM""")
-        self.conn.commit()
-
-    ####################################################
-
-    def close(self):
-        self.crs.close()
-        self.conn.close()
-
-    ####################################################
-
-    def get_queues(self):
-        """
-        @return: list of queues names
-        """
-        self.crs.execute("""SELECT queue_name FROM items GROUP BY queue_name""")
-        return [r[0] for r in self.crs.fetchall()]
-
-    ####################################################
-
-    def get_items(self, queue_name):
-        """
-        @return: items of the queue
-        """
-        self.crs.execute("""SELECT uuid, data, ttl, flags FROM items
-                                   WHERE queue_name = ?""",
-                          (queue_name,))
-        items = []
-        for res in self.crs.fetchall():
-            items.append(Message(uuid=res[0].decode("base64"), 
-                                data=res[1],
-                                ttl=res[2],
-                                flags=res[3]))
-        return items
-
-    ####################################################
-
-    def push(self, queue_name, item):
-        self.crs.execute("""INSERT INTO items
-                                (queue_name, uuid, data, ttl, flags)
-                                VALUES (?, ?, ?, ?, ?)""",
-                      (queue_name, item.uuid.encode("base64"), item.data,
-                      item.ttl, item.flags))
-        self.conn.commit()
-
-    ####################################################
-
-    def delete_items(self, items):
-        # TODO use SQL operator "IN"
-        for item in items:
-            self.crs.execute("""DELETE FROM items WHERE uuid = ?""", 
-                              (item.uuid.encode("base64"),))
-        self.conn.commit()
-
-    ####################################################
-
-    def update_items_ttl(self, items):
-        for item in items:
-            self.crs.execute("""UPDATE items SET ttl = ? WHERE uuid = ?""",
-                          (item.ttl, item.uuid.encode("base64")))
-        self.conn.commit()

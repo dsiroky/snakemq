@@ -85,26 +85,27 @@ class ConnectionInfo(object):
 ############################################################################
 
 class Packeter(object):
-    # callbacks
-    on_connect = Callback() #: C{func(conn_id)}
-    on_disconnect = Callback() #: C{func(conn_id)}
-    on_packet_recv = Callback() #: C{func(conn_id, packet)}
-    #: C{func(conn_id, packet_id)}, just a signal when a packet was fully sent
-    on_packet_sent = Callback()
-    on_error = Callback() #: C{func(conn_id, exception)}
-
     def __init__(self, link):
         self.link = link
         self.log = logging.getLogger("snakemq.packeter")
+
+        #{ callbacks
+        self.on_connect = Callback(single=False) #: C{func(conn_id)}
+        self.on_disconnect = Callback(single=False) #: C{func(conn_id)}
+        self.on_packet_recv = Callback() #: C{func(conn_id, packet)}
+        #: C{func(conn_id, packet_id)}, just a signal when a packet was fully sent
+        self.on_packet_sent = Callback()
+        self.on_error = Callback(single=False) #: C{func(conn_id, exception)}
+        #}
 
         self._connections = {} # conn_id:ConnectionInfo
         self._queued_packets = deque()
         self._last_packet_id = 0
 
-        self.link.on_connect = self._on_connect
-        self.link.on_disconnect = self._on_disconnect
-        self.link.on_recv = self._on_recv
-        self.link.on_ready_to_send = self._on_ready_to_send
+        self.link.on_connect.add(self._on_connect)
+        self.link.on_disconnect.add(self._on_disconnect)
+        self.link.on_recv.add(self._on_recv)
+        self.link.on_ready_to_send.add(self._on_ready_to_send)
 
     ###########################################################
     ###########################################################

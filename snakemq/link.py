@@ -34,19 +34,21 @@ class Link(object):
     and L{on_loop_pass}.
     """
 
-    #{ callbacks
-    on_connect = Callback() #: C{func(conn_id)}
-    on_disconnect = Callback() #: C{func(conn_id)}
-    on_recv = Callback() #: C{func(conn_id, data)}
-    on_ready_to_send = Callback() #: C{func(conn_id)}, last send was successful
-    on_loop_pass = Callback() #: C{func()}, called after poll is processed
-    #}
-
     def __init__(self):
         self.log = logging.getLogger("snakemq.link")
 
         self.reconnect_interval = RECONNECT_INTERVAL #: in seconds
         self.recv_block_size = RECV_BLOCK_SIZE
+
+        #{ callbacks
+        self.on_connect = Callback(single=False) #: C{func(conn_id)}
+        self.on_disconnect = Callback(single=False) #: C{func(conn_id)}
+        self.on_recv = Callback() #: C{func(conn_id, data)}
+        #: C{func(conn_id)}, last send was successful
+        self.on_ready_to_send = Callback()
+        #: C{func()}, called after poll is processed
+        self.on_loop_pass = Callback(single=False)
+        #}
 
         self._do_loop = False #: False breaks the loop
 
@@ -131,7 +133,7 @@ class Link(object):
         del self._reconnect_intervals[address]
 
         # filter out address from plan
-        self._plannned_connections = \
+        self._plannned_connections[:] = \
             [(when, _address)
                   for (when, _address) in self._plannned_connections
                   if _address != address]
