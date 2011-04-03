@@ -276,8 +276,8 @@ class QueuesManager(object):
         """
         @param storage: None or persistent storage
         """
+        assert (storage is None) or isinstance(storage, QueuesStorage)
         self.storage = storage
-        assert isinstance(storage, QueuesStorage)
         self.queues = {}  #: name:Queue
         if storage:
             self.load_from_storage()
