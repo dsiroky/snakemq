@@ -93,44 +93,45 @@ class RpcServer(object):
     ######################################################
 
     def on_recv(self, dummy_conn_id, ident, message):
-        try:
-            params = pickle.loads(message.data[len(REQUEST_PREFIX):])
-            cmd = params["command"]
-            if cmd in ("call", "signal"):
-                # method must not block link loop
-                thr = threading.Thread(target=self.call_method,
-                                      args=(ident, params))
-                thr.setDaemon(True)
-                thr.start()
-        except Exception, exc:
-            if not self.raise_remote_exception:
-                exc = RunError(exc)
-            self.send_exception(ident, params["req_id"], exc)
+        params = pickle.loads(message.data[len(REQUEST_PREFIX):])
+        cmd = params["command"]
+        if cmd in ("call", "signal"):
+            # method must not block link loop
+            thr = threading.Thread(target=self.call_method,
+                                  args=(ident, params))
+            thr.setDaemon(True)
+            thr.start()
 
     ######################################################
 
     def call_method(self, ident, params):
-        objname = params["object"]
         try:
-            instance = self.instances[objname]
-        except KeyError:
-            raise NoInstanceError(objname)
+            objname = params["object"]
+            try:
+                instance = self.instances[objname]
+            except KeyError:
+                raise NoInstanceError(objname)
 
-        try:
-            method = getattr(instance.__class__, params["method"])
-        except KeyError:
-            raise NoMethodError(params["method"])
+            try:
+                method = getattr(instance.__class__, params["method"])
+            except KeyError:
+                raise NoMethodError(params["method"])
 
-        has_signal_attr = hasattr(method, METHOD_RPC_AS_SIGNAL_ATTR)
-        if ((params["command"] == "signal" and not has_signal_attr) or
-            (params["command"] == "call" and has_signal_attr)):
-            warnings.warn("wrong command match for %r" % method, SignalCallWarning)
+            has_signal_attr = hasattr(method, METHOD_RPC_AS_SIGNAL_ATTR)
+            if ((params["command"] == "signal" and not has_signal_attr) or
+                (params["command"] == "call" and has_signal_attr)):
+                warnings.warn("wrong command match for %r" % method,
+                              SignalCallWarning)
 
-        ret = method(instance, *params["args"], **params["kwargs"])
+            ret = method(instance, *params["args"], **params["kwargs"])
 
-        # signals have no return value
-        if params["command"] == "call":
-            self.send_return(ident, params["req_id"], ret)
+            # signals have no return value
+            if params["command"] == "call":
+                self.send_return(ident, params["req_id"], ret)
+        except Exception, exc:
+            if not self.raise_remote_exception:
+                exc = RunError(exc)
+            self.send_exception(ident, params["req_id"], exc)
 
     ######################################################
 
