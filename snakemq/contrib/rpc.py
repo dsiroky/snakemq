@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 """
 @author: David Siroky (siroky@dasir.cz)
-@license: MIT License (see LICENSE.txt or 
+@license: MIT License (see LICENSE.txt or
           U{http://www.opensource.org/licenses/mit-license.php})
 """
 
-import struct
 import traceback
 import cPickle as pickle
 import threading
@@ -37,22 +36,22 @@ class Error(StandardError):
 class NoInstanceError(Error):
     """ requested object not found """
     pass
-    
+
 class NoClassError(Error):
     """ requested class not found """
-    pass 
+    pass
 
 class NoMethodError(Error):
     """ requested method not found """
-    pass 
+    pass
 
-class RunError(Error): 
+class RunError(Error):
     """ error in remote method """
     pass
 
 class SignalCallWarning(Warning):
     """ signal method called normally or regular method called as signal """
-    pass 
+    pass
 
 ###############################################################################
 ###############################################################################
@@ -84,7 +83,7 @@ class RpcServer(object):
         self.receive_hook = receive_hook
         receive_hook.register(REQUEST_PREFIX, self.on_recv)
         self.instances = {}
-        self.raise_remote_exception = True # raise RunError or the real exception
+        self.raise_remote_exception = True  # raise RunError or the real exception
 
     ######################################################
 
@@ -93,7 +92,7 @@ class RpcServer(object):
 
     ######################################################
 
-    def on_recv(self, conn_id, ident, message):
+    def on_recv(self, dummy_conn_id, ident, message):
         try:
             params = pickle.loads(message.data[len(REQUEST_PREFIX):])
             cmd = params["command"]
@@ -103,11 +102,9 @@ class RpcServer(object):
                                       args=(ident, params))
                 thr.setDaemon(True)
                 thr.start()
-        except Exception, e:
-            if self.raise_remote_exception:
-                exc = e
-            else:
-                exc = RunError(e)
+        except Exception, exc:
+            if not self.raise_remote_exception:
+                exc = RunError(exc)
             self.send_exception(ident, params["req_id"], exc)
 
     ######################################################
@@ -116,19 +113,19 @@ class RpcServer(object):
         objname = params["object"]
         try:
             instance = self.instances[objname]
-        except KeyError: 
+        except KeyError:
             raise NoInstanceError(objname)
 
         try:
-            method = getattr(instance.__class__,params["method"])
+            method = getattr(instance.__class__, params["method"])
         except KeyError:
             raise NoMethodError(params["method"])
-        
+
         has_signal_attr = hasattr(method, METHOD_RPC_AS_SIGNAL_ATTR)
         if ((params["command"] == "signal" and not has_signal_attr) or
             (params["command"] == "call" and has_signal_attr)):
             warnings.warn("wrong command match for %r" % method, SignalCallWarning)
-        
+
         ret = method(instance, *params["args"], **params["kwargs"])
 
         # signals have no return value
@@ -138,15 +135,15 @@ class RpcServer(object):
     ######################################################
 
     def send_exception(self, ident, req_id, exc):
-        tb = traceback.format_exc()
-        data = {"ok": False, "exception": (exc, tb), "req_id": req_id}
-        self.send(ident, data)                
+        traceb = traceback.format_exc()
+        data = {"ok": False, "exception": (exc, traceb), "req_id": req_id}
+        self.send(ident, data)
 
     ######################################################
 
     def send_return(self, ident, req_id, res):
         data = {"ok": True, "return": res, "req_id": req_id}
-        self.send(ident, data)                
+        self.send(ident, data)
 
     ######################################################
 
@@ -154,7 +151,7 @@ class RpcServer(object):
         data = pickle.dumps(data)
         message = Message(data=REPLY_PREFIX + data)
         self.receive_hook.messaging.send_message(ident, message)
-        
+
 ###############################################################################
 ###############################################################################
 # client
@@ -166,6 +163,7 @@ class RemoteMethod(object):
         self.name = name
 
     def __call__(self, *args, **kwargs):
+        # pylint: disable=W0212
         timeout = self.iproxy._as_signal.get(self.name)
         if timeout is None:
             command = "call"
@@ -177,18 +175,18 @@ class RemoteMethod(object):
                   "req_id": uuid.uuid1().bytes,
                   "command": command,
                   "object": self.iproxy._name,
-                  "method": self.name, 
+                  "method": self.name,
                   "args": args,
                   "kwargs": kwargs
                 }
             ident = self.iproxy._remote_ident
             return self.iproxy._client.remote_request(ident, params, timeout)
-        except Exception, e:
-            eh = self.iproxy._client.exception_handler
-            if eh is None: 
+        except Exception, exc:
+            ehandler = self.iproxy._client.exception_handler
+            if ehandler is None:
                 raise
-            else: 
-                eh(e)
+            else:
+                ehandler(exc)
 
 #########################################################################
 #########################################################################
@@ -216,7 +214,7 @@ class RpcInstProxy(object):
         @param timeout: messaging TTL
         """
         self._as_signal[method_name] = timeout
-        
+
 #########################################################################
 #########################################################################
 
@@ -229,12 +227,12 @@ class RpcClient(object):
         self.results = {}
         self.lock = threading.Lock()
         self.cond = threading.Condition(self.lock)
-        self.connected = {} #: remote_ident:bool
+        self.connected = {}  #: remote_ident:bool
 
         receive_hook.register(REPLY_PREFIX, self.on_recv)
         receive_hook.messaging.on_connect = self.on_connect
         receive_hook.messaging.on_disconnect = self.on_disconnect
-    
+
     ######################################################
 
     def send_params(self, remote_ident, params, ttl):
@@ -244,21 +242,21 @@ class RpcClient(object):
 
     ######################################################
 
-    def on_connect(self, conn_id, ident):
+    def on_connect(self, dummy_conn_id, ident):
         with self.cond:
             self.connected[ident] = True
             self.cond.notify_all()
 
     ######################################################
 
-    def on_disconnect(self, conn_id, ident):
+    def on_disconnect(self, dummy_conn_id, ident):
         with self.cond:
             self.connected[ident] = False
             self.cond.notify_all()
 
     ######################################################
 
-    def on_recv(self, conn_id, ident, message):
+    def on_recv(self, dummy_conn_id, dummy_ident, message):
         res = pickle.loads(message.data[len(REPLY_PREFIX):])
         with self.cond:
             self.results[res["req_id"]] = res
@@ -275,19 +273,19 @@ class RpcClient(object):
                 while True:
                     if self.connected.get(remote_ident):
                         self.send_params(remote_ident, params, 0)
-                        while ((req_id not in self.results) and 
+                        while ((req_id not in self.results) and
                                   self.connected.get(remote_ident)):
                             self.cond.wait(WAIT_TIMEOUT)
                     if self.connected.get(remote_ident):
                         res = self.results[req_id]
                         break
                     else:
-                        self.cond.wait(WAIT_TIMEOUT) # for signal from connect/di
+                        self.cond.wait(WAIT_TIMEOUT)  # for signal from connect/di
             if res["ok"]:
                 return res["return"]
             else:
-                (exc, tb) = res["exception"]
-                self.remote_tb = tb
+                (exc, traceb) = res["exception"]
+                self.remote_tb = traceb
                 raise exc
         else:
             self.send_params(remote_ident, params, signal_timeout)
@@ -299,4 +297,3 @@ class RpcClient(object):
         @return: instance registered with register_object()
         """
         return RpcInstProxy(self, remote_ident, name)
-

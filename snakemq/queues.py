@@ -4,12 +4,11 @@ Queues and persistent storage. TTL is decreased only by the
 disconnected time.  Queue manager "downtime" is not included.
 
 @author: David Siroky (siroky@dasir.cz)
-@license: MIT License (see LICENSE.txt or 
+@license: MIT License (see LICENSE.txt or
           U{http://www.opensource.org/licenses/mit-license.php})
 """
 
 import time
-import bisect
 import sqlite3
 from collections import defaultdict, deque
 
@@ -35,7 +34,7 @@ class Queue(object):
     ####################################################
 
     def load_persistent_data(self):
-        self.queue[:] = self.manager.storage.get_items(self.name)            
+        self.queue[:] = self.manager.storage.get_items(self.name)
 
     ####################################################
 
@@ -49,7 +48,7 @@ class Queue(object):
         storage_to_delete = []
         for item in self.queue:
             item.ttl -= diff
-            if item.ttl >= 0: # must include 0
+            if item.ttl >= 0:  # must include 0
                 fresh_queue.append(item)
                 if item.flags & FLAG_PERSISTENT:
                     storage_update_ttls.append(item)
@@ -74,11 +73,11 @@ class Queue(object):
             # do not queue already obsolete items
             return
         self.queue.append(item)
-        if ((item.flags & FLAG_PERSISTENT) and (item.ttl > 0) and 
+        if ((item.flags & FLAG_PERSISTENT) and (item.ttl > 0) and
                 self.manager.storage):
             # no need to store items with no TTL
             self.manager.storage.push(self.name, item)
-        
+
     ####################################################
 
     def get(self):
@@ -234,7 +233,7 @@ class SqliteQueuesStorage(QueuesStorage):
                           (queue_name,))
         items = []
         for res in self.crs.fetchall():
-            items.append(Message(uuid=res[0].decode("base64"), 
+            items.append(Message(uuid=res[0].decode("base64"),
                                 data=res[1],
                                 ttl=res[2],
                                 flags=res[3]))
@@ -256,7 +255,7 @@ class SqliteQueuesStorage(QueuesStorage):
         # TODO use SQL operator "IN"
         with self.conn:
             for item in items:
-                self.crs.execute("""DELETE FROM items WHERE uuid = ?""", 
+                self.crs.execute("""DELETE FROM items WHERE uuid = ?""",
                               (item.uuid.encode("base64"),))
 
     ####################################################
@@ -279,7 +278,7 @@ class QueuesManager(object):
         """
         self.storage = storage
         assert isinstance(storage, QueuesStorage)
-        self.queues = {} #: name:Queue
+        self.queues = {}  #: name:Queue
         if storage:
             self.load_from_storage()
 
@@ -335,4 +334,3 @@ class QueuesManager(object):
 
     def __len__(self):
         return len(self.queues)
-

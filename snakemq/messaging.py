@@ -12,17 +12,17 @@ Payload
 - message: C{[16B UUID|4B TTL|4B flags|message]}
 
 @author: David Siroky (siroky@dasir.cz)
-@license: MIT License (see LICENSE.txt or 
+@license: MIT License (see LICENSE.txt or
           U{http://www.opensource.org/licenses/mit-license.php})
 """
 
 import struct
 import logging
 import threading
-import uuid
 import re
 
-from snakemq.exceptions import SnakeMQBrokenMessage, SnakeMQException
+from snakemq.exceptions import (SnakeMQBrokenMessage, SnakeMQException,
+                                SnakeMQIncompatibleProtocol)
 from snakemq.queues import QueuesManager, Message
 from snakemq.callbacks import Callback
 import snakemq.version
@@ -40,9 +40,9 @@ FRAME_FORMAT_PROTOCOL_VERSION_SIZE = struct.calcsize(FRAME_FORMAT_PROTOCOL_VERSI
 FRAME_FORMAT_MESSAGE = "!16sII"
 FRAME_FORMAT_MESSAGE_SIZE = struct.calcsize(FRAME_FORMAT_MESSAGE)
 
-MIN_FRAME_SIZE = 1 # just the type field
+MIN_FRAME_SIZE = 1  # just the type field
 
-MESSAGE_FLAG_PERSISTENT = 0x1 #: deliver at all cost (queue to disk as well)
+MESSAGE_FLAG_PERSISTENT = 0x1  #: deliver at all cost (queue to disk as well)
 
 #############################################################################
 #############################################################################
@@ -56,10 +56,10 @@ class Messaging(object):
         self.log = logging.getLogger("snakemq.messaging")
 
         #{ callbacks
-        self.on_error = Callback(single=False) #: C{func(conn_id, exception)}
-        self.on_message_recv = Callback() #: C{func(conn_id, ident, message)}
-        self.on_connect = Callback(single=False) #: C{func(conn_id, ident)}
-        self.on_disconnect = Callback(single=False) #: C{func(conn_id, ident)}
+        self.on_error = Callback(single=False)  #: C{func(conn_id, exception)}
+        self.on_message_recv = Callback()  #: C{func(conn_id, ident, message)}
+        self.on_connect = Callback(single=False)  #: C{func(conn_id, ident)}
+        self.on_disconnect = Callback(single=False)  #: C{func(conn_id, ident)}
         #}
 
         self._ident_by_conn = {}
@@ -130,10 +130,10 @@ class Messaging(object):
         if len(payload) < FRAME_FORMAT_MESSAGE_SIZE:
             raise SnakeMQBrokenMessage("message")
 
-        uuid, ttl, flags = struct.unpack(FRAME_FORMAT_MESSAGE,
+        muuid, ttl, flags = struct.unpack(FRAME_FORMAT_MESSAGE,
                                           payload[:FRAME_FORMAT_MESSAGE_SIZE])
         message = Message(data=payload[FRAME_FORMAT_MESSAGE_SIZE:],
-                          uuid=uuid, ttl=ttl, flags=flags)
+                          uuid=muuid, ttl=ttl, flags=flags)
         self.on_message_recv(conn_id, self._ident_by_conn[conn_id], message)
 
     ###########################################################
@@ -157,7 +157,7 @@ class Messaging(object):
             elif frame_type == FRAME_TYPE_MESSAGE:
                 self.parse_message(payload, conn_id)
         except SnakeMQException, exc:
-            self.log.error("conn=%s ident=%s %r" % 
+            self.log.error("conn=%s ident=%s %r" %
                   (conn_id, self._ident_by_conn.get(conn_id), exc))
             self.on_error(conn_id, exc)
             self.packeter.link.close(conn_id)
@@ -166,7 +166,7 @@ class Messaging(object):
 
     def send_protocol_version(self, conn_id):
         self.packeter.send_packet(conn_id,
-            FRAME_TYPE_PROTOCOL_VERSION + 
+            FRAME_TYPE_PROTOCOL_VERSION +
             struct.pack(FRAME_FORMAT_PROTOCOL_VERSION,
                         snakemq.version.PROTOCOL_VERSION))
 

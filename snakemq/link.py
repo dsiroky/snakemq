@@ -1,14 +1,13 @@
 # -*- coding: utf-8 -*-
 """
 @author: David Siroky (siroky@dasir.cz)
-@license: MIT License (see LICENSE.txt or 
+@license: MIT License (see LICENSE.txt or
           U{http://www.opensource.org/licenses/mit-license.php})
 """
 
 import select
 import socket
 import os
-import sys
 import errno
 import time
 import bisect
@@ -37,40 +36,40 @@ class Link(object):
     def __init__(self):
         self.log = logging.getLogger("snakemq.link")
 
-        self.reconnect_interval = RECONNECT_INTERVAL #: in seconds
+        self.reconnect_interval = RECONNECT_INTERVAL  #: in seconds
         self.recv_block_size = RECV_BLOCK_SIZE
 
         #{ callbacks
-        self.on_connect = Callback(single=False) #: C{func(conn_id)}
-        self.on_disconnect = Callback(single=False) #: C{func(conn_id)}
-        self.on_recv = Callback() #: C{func(conn_id, data)}
+        self.on_connect = Callback(single=False)  #: C{func(conn_id)}
+        self.on_disconnect = Callback(single=False)  #: C{func(conn_id)}
+        self.on_recv = Callback()  #: C{func(conn_id, data)}
         #: C{func(conn_id)}, last send was successful
         self.on_ready_to_send = Callback()
         #: C{func()}, called after poll is processed
         self.on_loop_pass = Callback(single=False)
         #}
 
-        self._do_loop = False #: False breaks the loop
+        self._do_loop = False  #: False breaks the loop
 
-        self._new_conn_id = 0 #: counter for conn id generator
+        self._new_conn_id = 0  #: counter for conn id generator
 
         self.poller = select.epoll()
         self._poll_bell = os.pipe()
         self.log.debug("poll bell fd=%r" % (self._poll_bell,))
-        self.poller.register(self._poll_bell[0], select.EPOLLIN) # read part
+        self.poller.register(self._poll_bell[0], select.EPOLLIN)  # read part
 
         self._sock_by_fd = {}
         self._conn_by_sock = {}
         self._sock_by_conn = {}
 
-        self._listen_socks = {} #: address:sock
+        self._listen_socks = {}  #: address:sock
         self._listen_socks_filenos = set()
 
-        self._connectors = {} #: address:sock
-        self._socks_addresses = {} #: sock:address
+        self._connectors = {}  #: address:sock
+        self._socks_addresses = {}  #: sock:address
         self._socks_waiting_to_connect = set()
-        self._plannned_connections = [] #: (when, address)
-        self._reconnect_intervals = {} #: address:interval
+        self._plannned_connections = []  #: (when, address)
+        self._reconnect_intervals = {}  #: address:interval
 
     ##########################################################
 
@@ -105,7 +104,7 @@ class Link(object):
         assert len(self._socks_waiting_to_connect) == 0
         assert len(self._plannned_connections) == 0
         assert len(self._reconnect_intervals) == 0
-        
+
     ##########################################################
 
     def add_connector(self, address, reconnect_interval=None):
@@ -119,10 +118,10 @@ class Link(object):
         address = socket.gethostbyname(address[0]), address[1]
         if address in self._connectors:
             raise ValueError("connector '%r' already set", address)
-        self._connectors[address] = None # no socket yet
+        self._connectors[address] = None  # no socket yet
         self._reconnect_intervals[address] = \
                 reconnect_interval or self.reconnect_interval
-        self.plan_connect(0, address) # connect ASAP
+        self.plan_connect(0, address)  # connect ASAP
         return address
 
     ##########################################################
@@ -230,7 +229,7 @@ class Link(object):
 
         time_start = time.time()
         while (self._do_loop and
-                (count is not 0) and 
+                (count is not 0) and
                 not ((runtime is not None) and
                       (time.time() - time_start > runtime))):
             is_event = len(self.loop_pass(poll_timeout))
@@ -279,7 +278,7 @@ class Link(object):
         item = (when, address)
         idx = bisect.bisect(self._plannned_connections, item)
         self._plannned_connections.insert(idx, item)
-    
+
     ##########################################################
 
     def _connect(self, address):
@@ -294,7 +293,7 @@ class Link(object):
         self._connectors[address] = sock
         self._socks_addresses[sock] = address
         self._socks_waiting_to_connect.add(sock)
-        
+
         err = sock.connect_ex(address)
         if err in (0, errno.EISCONN):
             self.handle_connect(sock)
@@ -394,7 +393,7 @@ class Link(object):
     def handle_fd_mask(self, fd, mask):
         if fd == self._poll_bell[0]:
             assert mask & select.EPOLLIN
-            bell_data = os.read(self._poll_bell[0], BELL_READ) # flush the pipe
+            bell_data = os.read(self._poll_bell[0], BELL_READ)  # flush the pipe
             assert len(bell_data) == 1
         else:
             # socket might have been already discarded by the Link
@@ -424,7 +423,7 @@ class Link(object):
 
     def loop_pass(self, poll_timeout):
         """
-        @return: values returned by poll 
+        @return: values returned by poll
         """
         fds = self.poller.poll(poll_timeout)
         for fd, mask in fds:
@@ -447,4 +446,3 @@ class Link(object):
 
         if to_remove:
             del self._plannned_connections[:to_remove]
-

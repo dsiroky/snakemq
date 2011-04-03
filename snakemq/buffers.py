@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 @author: David Siroky (siroky@dasir.cz)
-@license: MIT License (see LICENSE.txt or 
+@license: MIT License (see LICENSE.txt or
           U{http://www.opensource.org/licenses/mit-license.php})
 """
 
@@ -33,7 +33,7 @@ class BufferTooLarge(BufferException):
 
 class StreamBuffer(object):
     def __init__(self):
-        self.size = 0 #: current size of the buffer
+        self.size = 0  #: current size of the buffer
         self.max_size = None
         self.queue = deque()
         self.not_full_cond = threading.Condition()
@@ -103,7 +103,7 @@ class StreamBuffer(object):
         @param cut: True = remove returned data from buffer
         @return: max N-bytes from the buffer.
         """
-        assert (((self.size > 0) and (len(self.queue) > 0)) 
+        assert (((self.size > 0) and (len(self.queue) > 0))
              or ((self.size == 0) and (len(self.queue) == 0)))
 
         retbuf = []
@@ -125,7 +125,7 @@ class StreamBuffer(object):
                     frag_len = size
                 else:
                     frag_len = len(fragment)
-                
+
                 retbuf.append(fragment)
                 del fragment
 
@@ -137,7 +137,7 @@ class StreamBuffer(object):
                     if i == len(self.queue):
                         break
 
-            if (self.max_size and (orig_size >= self.max_size) and 
+            if (self.max_size and (orig_size >= self.max_size) and
                                   (self.size < self.max_size)):
                 self.not_full_cond.notify()
 
@@ -149,7 +149,7 @@ class StreamBuffer(object):
         """
         More efficient version of get(cut=True) and no data will be returned.
         """
-        assert (((self.size > 0) and (len(self.queue) > 0)) 
+        assert (((self.size > 0) and (len(self.queue) > 0))
              or ((self.size == 0) and (len(self.queue) == 0)))
 
         with self.not_full_cond:
@@ -163,12 +163,12 @@ class StreamBuffer(object):
                     frag_len = size
                 else:
                     frag_len = len(fragment)
-                
+
                 del fragment
                 size -= frag_len
                 self.size -= frag_len
 
-            if (self.max_size and (orig_size >= self.max_size) and 
+            if (self.max_size and (orig_size >= self.max_size) and
                                   (self.size < self.max_size)):
                 self.not_full_cond.notify()
 
@@ -177,4 +177,3 @@ class StreamBuffer(object):
     def __len__(self):
         assert sum([len(item) for item in self.queue]) == self.size
         return self.size
-

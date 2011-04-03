@@ -3,7 +3,7 @@
 Message container.
 
 @author: David Siroky (siroky@dasir.cz)
-@license: MIT License (see LICENSE.txt or 
+@license: MIT License (see LICENSE.txt or
           U{http://www.opensource.org/licenses/mit-license.php})
 """
 
@@ -12,7 +12,7 @@ import uuid as uuid_module
 ###########################################################################
 ###########################################################################
 
-FLAG_PERSISTENT = 0x1 # store to a persistent storage
+FLAG_PERSISTENT = 0x1  # store to a persistent storage
 
 ###########################################################################
 ###########################################################################

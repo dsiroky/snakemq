@@ -4,7 +4,7 @@ Packet format: C{[4B size|payload]}, size is bytes count (unsigned integer in
 network order) of all following packet data.
 
 @author: David Siroky (siroky@dasir.cz)
-@license: MIT License (see LICENSE.txt or 
+@license: MIT License (see LICENSE.txt or
           U{http://www.opensource.org/licenses/mit-license.php})
 """
 
@@ -21,7 +21,7 @@ from snakemq.callbacks import Callback
 
 SEND_BLOCK_SIZE = 64 * 1024
 
-BIN_SIZE_FORMAT = "!I" # network order 32-bit unsigned integer
+BIN_SIZE_FORMAT = "!I"  # network order 32-bit unsigned integer
 SIZEOF_BIN_SIZE = struct.calcsize(BIN_SIZE_FORMAT)
 
 ############################################################################
@@ -43,8 +43,8 @@ def bin_to_size(buf):
 class ReceiveBuffer(StreamBuffer):
     def __init__(self):
         StreamBuffer.__init__(self)
-        self.packet_size = None # cache for packet size by its header
-  
+        self.packet_size = None  # cache for packet size by its header
+
     ############################################################
 
     def get_packets(self):
@@ -90,15 +90,15 @@ class Packeter(object):
         self.log = logging.getLogger("snakemq.packeter")
 
         #{ callbacks
-        self.on_connect = Callback(single=False) #: C{func(conn_id)}
-        self.on_disconnect = Callback(single=False) #: C{func(conn_id)}
-        self.on_packet_recv = Callback() #: C{func(conn_id, packet)}
+        self.on_connect = Callback(single=False)  #: C{func(conn_id)}
+        self.on_disconnect = Callback(single=False)  #: C{func(conn_id)}
+        self.on_packet_recv = Callback()  #: C{func(conn_id, packet)}
         #: C{func(conn_id, packet_id)}, just a signal when a packet was fully sent
         self.on_packet_sent = Callback()
-        self.on_error = Callback(single=False) #: C{func(conn_id, exception)}
+        self.on_error = Callback(single=False)  #: C{func(conn_id, exception)}
         #}
 
-        self._connections = {} # conn_id:ConnectionInfo
+        self._connections = {}  # conn_id:ConnectionInfo
         self._queued_packets = deque()
         self._last_packet_id = 0
 
