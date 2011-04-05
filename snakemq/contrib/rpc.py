@@ -231,8 +231,8 @@ class RpcClient(object):
         self.connected = {}  #: remote_ident:bool
 
         receive_hook.register(REPLY_PREFIX, self.on_recv)
-        receive_hook.messaging.on_connect = self.on_connect
-        receive_hook.messaging.on_disconnect = self.on_disconnect
+        receive_hook.messaging.on_connect.add(self.on_connect)
+        receive_hook.messaging.on_disconnect.add(self.on_disconnect)
 
     ######################################################
 
