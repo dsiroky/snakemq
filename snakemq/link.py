@@ -13,6 +13,12 @@ import time
 import bisect
 import logging
 
+if hasattr(select, "epoll"):
+    epoll = select.epoll
+else:
+    import winpoll
+    epoll = winpoll.Epoll
+
 from snakemq.callbacks import Callback
 
 ############################################################################
@@ -53,7 +59,7 @@ class Link(object):
 
         self._new_conn_id = 0  #: counter for conn id generator
 
-        self.poller = select.epoll()
+        self.poller = epoll()
         self._poll_bell = os.pipe()
         self.log.debug("poll bell fd=%r" % (self._poll_bell,))
         self.poller.register(self._poll_bell[0], select.EPOLLIN)  # read part
