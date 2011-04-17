@@ -20,7 +20,7 @@ FLAG_PERSISTENT = 0x1  # store to a persistent storage
 class Message(object):
     def __init__(self, data, uuid=None, ttl=0, flags=0):
         """
-        @param data: payload
+        @param data: payload, B{must be immutable} (or deepcopied)
         @param uuid: unique message identifier (implicitly generated)
         @param ttl: messaging TTL in seconds (integer or float)
         @param flags: combination of FLAG_*

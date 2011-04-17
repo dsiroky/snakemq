@@ -400,7 +400,6 @@ class Link(object):
         if fd == self._poll_bell[0]:
             assert mask & select.EPOLLIN
             bell_data = os.read(self._poll_bell[0], BELL_READ)  # flush the pipe
-            assert len(bell_data) == 1
         else:
             # socket might have been already discarded by the Link
             # so this pass might be skipped
@@ -431,7 +430,13 @@ class Link(object):
         """
         @return: values returned by poll
         """
-        fds = self.poller.poll(poll_timeout)
+        fds = []
+        try:
+            fds = self.poller.poll(poll_timeout)
+        except IOError, exc:
+            if exc.errno != errno.EINTR:  # hibernate does that
+                raise
+
         for fd, mask in fds:
             self.handle_fd_mask(fd, mask)
         self.deal_connects()

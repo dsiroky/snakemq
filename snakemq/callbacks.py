@@ -29,12 +29,16 @@ class Callback(object):
 
     def add(self, func):
         """
-        Callback can be set only once.
-        @raises CallbackPresent:
+        @raises CallbackPresent: if self.single and callback is already added
         """
         if (len(self.callbacks) > 0) and self.single:
             raise CallbackPresent()
         self.callbacks.add(func)
+
+    ####################################################
+
+    def remove(self, func):
+        self.callbacks.remove(func)
 
     ####################################################
 

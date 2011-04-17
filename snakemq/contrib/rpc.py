@@ -37,16 +37,8 @@ class NoInstanceError(Error):
     """ requested object not found """
     pass
 
-class NoClassError(Error):
-    """ requested class not found """
-    pass
-
 class NoMethodError(Error):
     """ requested method not found """
-    pass
-
-class RunError(Error):
-    """ error in remote method """
     pass
 
 class SignalCallWarning(Warning):
@@ -83,7 +75,8 @@ class RpcServer(object):
         self.receive_hook = receive_hook
         receive_hook.register(REQUEST_PREFIX, self.on_recv)
         self.instances = {}
-        self.raise_remote_exception = True  # raise RunError or the real exception
+        #: transmit call exception back to client
+        self.transmit_exceptions = True
 
     ######################################################
 
@@ -97,7 +90,7 @@ class RpcServer(object):
         cmd = params["command"]
         if cmd in ("call", "signal"):
             # method must not block link loop
-            thr = threading.Thread(target=self.call_method,
+            thr = threading.Thread(target=self.call_method, name="mqrpc_call",
                                   args=(ident, params))
             thr.setDaemon(True)
             thr.start()
@@ -105,6 +98,7 @@ class RpcServer(object):
     ######################################################
 
     def call_method(self, ident, params):
+        # TODO better exception handling
         try:
             objname = params["object"]
             try:
@@ -113,7 +107,7 @@ class RpcServer(object):
                 raise NoInstanceError(objname)
 
             try:
-                method = getattr(instance.__class__, params["method"])
+                method = getattr(instance, params["method"])
             except KeyError:
                 raise NoMethodError(params["method"])
 
@@ -123,15 +117,17 @@ class RpcServer(object):
                 warnings.warn("wrong command match for %r" % method,
                               SignalCallWarning)
 
-            ret = method(instance, *params["args"], **params["kwargs"])
+            # TODO extra try/except for the call
+            ret = method(*params["args"], **params["kwargs"])
 
             # signals have no return value
             if params["command"] == "call":
                 self.send_return(ident, params["req_id"], ret)
         except Exception, exc:
-            if not self.raise_remote_exception:
-                exc = RunError(exc)
-            self.send_exception(ident, params["req_id"], exc)
+            if self.transmit_exceptions:
+                self.send_exception(ident, params["req_id"], exc)
+            else:
+                raise
 
     ######################################################
 
@@ -283,6 +279,7 @@ class RpcClient(object):
                     else:
                         self.cond.wait(WAIT_TIMEOUT)  # for signal from connect/di
             if res["ok"]:
+                self.remote_tb = None
                 return res["return"]
             else:
                 (exc, traceb) = res["exception"]
