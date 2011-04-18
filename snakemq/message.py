@@ -26,7 +26,7 @@ class Message(object):
         @param flags: combination of FLAG_*
         """
         self.data = data
-        self.uuid = uuid or uuid_module.uuid1().bytes
+        self.uuid = uuid or uuid_module.uuid4().bytes
         self.ttl = float(ttl)
         self.flags = flags
 

@@ -21,8 +21,6 @@ from snakemq.message import Message
 REQUEST_PREFIX = "rpcreq"
 REPLY_PREFIX = "rpcrep"
 
-WAIT_TIMEOUT = 5
-
 METHOD_RPC_AS_SIGNAL_ATTR = "__snakemw_rpc_as_signal"
 
 ###############################################################################
@@ -169,7 +167,7 @@ class RemoteMethod(object):
 
         try:
             params = {
-                  "req_id": uuid.uuid1().bytes,
+                  "req_id": uuid.uuid4().bytes,
                   "command": command,
                   "object": self.iproxy._name,
                   "method": self.name,
@@ -272,12 +270,13 @@ class RpcClient(object):
                         self.send_params(remote_ident, params, 0)
                         while ((req_id not in self.results) and
                                   self.connected.get(remote_ident)):
-                            self.cond.wait(WAIT_TIMEOUT)
+                            self.cond.wait()
                     if self.connected.get(remote_ident):
                         res = self.results[req_id]
                         break
                     else:
-                        self.cond.wait(WAIT_TIMEOUT)  # for signal from connect/di
+                        self.cond.wait()  # for signal from connect/di
+
             if res["ok"]:
                 self.remote_tb = None
                 return res["return"]
