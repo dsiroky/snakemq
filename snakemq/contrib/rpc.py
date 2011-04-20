@@ -10,6 +10,7 @@ import cPickle as pickle
 import threading
 import uuid
 import warnings
+import logging
 
 from snakemq.message import Message
 
@@ -65,11 +66,14 @@ def as_signal(method):
 
 class RpcServer(object):
     """
+    Registering and unregistering objects is NOT thread safe.
+
     Methods of registered objects are called in a different thread other
     than the link loop.
     """
 
     def __init__(self, receive_hook):
+        self.log = logging.getLogger("snakemq.rpc.server")
         self.receive_hook = receive_hook
         receive_hook.register(REQUEST_PREFIX, self.on_recv)
         self.instances = {}
@@ -80,6 +84,16 @@ class RpcServer(object):
 
     def register_object(self, instance, name):
         self.instances[name] = instance
+
+    ######################################################
+
+    def unregister_object(self, name):
+        del self.instances[name]
+
+    ######################################################
+
+    def get_registered_objects(self):
+        return self.instances
 
     ######################################################
 
@@ -96,6 +110,8 @@ class RpcServer(object):
     ######################################################
 
     def call_method(self, ident, params):
+        self.log.debug("call_method ident=%r obj=%r method=%r" %
+                        (ident, params["object"], params["method"]))
         # TODO better exception handling
         try:
             objname = params["object"]
@@ -192,6 +208,7 @@ class RpcInstProxy(object):
         self._remote_ident = remote_ident
         self._name = name
         self._as_signal = {}
+        client.log.debug("new proxy %r" % self)
 
     def __getattr__(self, name):
         key = self._remote_ident + self._name + name
@@ -199,6 +216,7 @@ class RpcInstProxy(object):
             if key in self._client.method_proxies:
                 return self._client.method_proxies[key]
             else:
+                self._client.log.debug("new method %r name=%r" % (self, name))
                 proxy = RemoteMethod(self, name)
                 self._client.method_proxies[key] = proxy
                 return proxy
@@ -210,11 +228,16 @@ class RpcInstProxy(object):
         """
         self._as_signal[method_name] = timeout
 
+    def __repr__(self):
+        return ("<%s 0x%x remote_ident=%r name=%r>" %
+                (self.__class__.__name__, id(self), self._remote_ident, self._name))
+
 #########################################################################
 #########################################################################
 
 class RpcClient(object):
     def __init__(self, receive_hook):
+        self.log = logging.getLogger("snakemq.rpc.client")
         self.receive_hook = receive_hook
         self.method_proxies = {}
         self.exception_handler = None
@@ -260,6 +283,8 @@ class RpcClient(object):
     ######################################################
 
     def remote_request(self, remote_ident, params, signal_timeout):
+        self.log.debug("remote_request ident=%r obj=%r method=%r" %
+                        (remote_ident, params["object"], params["method"]))
         req_id = params["req_id"]
 
         if signal_timeout is None:
