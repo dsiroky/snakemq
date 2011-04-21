@@ -24,6 +24,8 @@ REPLY_PREFIX = "rpcrep"
 
 METHOD_RPC_AS_SIGNAL_ATTR = "__snakemw_rpc_as_signal"
 
+REMOTE_TRACEBACK_ATTR = "__remote_traceback__"
+
 ###############################################################################
 ###############################################################################
 # exceptions and warnings
@@ -241,7 +243,6 @@ class RpcClient(object):
         self.receive_hook = receive_hook
         self.method_proxies = {}
         self.exception_handler = None
-        self.remote_tb = None
         self.results = {}
         self.lock = threading.Lock()
         self.cond = threading.Condition(self.lock)
@@ -303,14 +304,18 @@ class RpcClient(object):
                         self.cond.wait()  # for signal from connect/di
 
             if res["ok"]:
-                self.remote_tb = None
                 return res["return"]
             else:
                 (exc, traceb) = res["exception"]
-                self.remote_tb = traceb
-                raise exc
+                self.raise_remote_exception(exc, traceb)
         else:
             self.send_params(remote_ident, params, signal_timeout)
+
+    ######################################################
+
+    def raise_remote_exception(self, exc, traceb):
+        setattr(exc, REMOTE_TRACEBACK_ATTR, traceb)
+        raise exc
 
     ######################################################
 
