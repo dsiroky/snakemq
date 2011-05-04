@@ -106,7 +106,7 @@ class TestLink(utils.TestCase):
         poll.
         """
         link = snakemq.link.Link()
-        bell_rd = link._poll_bell[0]
+        bell_rd = link._poll_bell.r
         
         # no event, no descriptor returned by poll
         self.assertEqual(len(link.loop_pass(0)), 0)
