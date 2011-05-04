@@ -19,6 +19,7 @@ else:
     import winpoll
     epoll = winpoll.Epoll
 
+from snakemq.pollbell import Bell
 from snakemq.callbacks import Callback
 
 ############################################################################
@@ -26,7 +27,7 @@ from snakemq.callbacks import Callback
 
 RECONNECT_INTERVAL = 3.0
 RECV_BLOCK_SIZE = 256 * 1024
-POLL_TIMEOUT = 0.2
+POLL_TIMEOUT = 0.1
 BELL_READ = 1024
 
 ############################################################################
@@ -60,9 +61,9 @@ class Link(object):
         self._new_conn_id = 0  #: counter for conn id generator
 
         self.poller = epoll()
-        self._poll_bell = os.pipe()
-        self.log.debug("poll bell fd=%r" % (self._poll_bell,))
-        self.poller.register(self._poll_bell[0], select.EPOLLIN)  # read part
+        self._poll_bell = Bell()
+        self.log.debug("poll bell fd=%r" % self._poll_bell)
+        self.poller.register(self._poll_bell.r, select.EPOLLIN)  # read part
 
         self._sock_by_fd = {}
         self._conn_by_sock = {}
@@ -183,7 +184,7 @@ class Link(object):
         """
         Thread-safe.
         """
-        os.write(self._poll_bell[1], "a")
+        self._poll_bell.write("a")
 
     ##########################################################
 
@@ -397,9 +398,9 @@ class Link(object):
     ##########################################################
 
     def handle_fd_mask(self, fd, mask):
-        if fd == self._poll_bell[0]:
+        if fd == self._poll_bell.r:
             assert mask & select.EPOLLIN
-            bell_data = os.read(self._poll_bell[0], BELL_READ)  # flush the pipe
+            bell_data = self._poll_bell.read(BELL_READ)  # flush the pipe
         else:
             # socket might have been already discarded by the Link
             # so this pass might be skipped

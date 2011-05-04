@@ -48,6 +48,14 @@ class SignalCallWarning(Warning):
 
 ###############################################################################
 ###############################################################################
+# support functions
+###############################################################################
+
+def to_hex(buf):
+    return "".join(["%02X" % ord(c) for c in buf])
+
+###############################################################################
+###############################################################################
 # functions
 ###############################################################################
 
@@ -79,7 +87,7 @@ class RpcServer(object):
         self.receive_hook = receive_hook
         receive_hook.register(REQUEST_PREFIX, self.on_recv)
         self.instances = {}
-        #: transmit call exception back to client
+        #: transmit call exception back to client (only for non-signal calls)
         self.transmit_exceptions = True
 
     ######################################################
@@ -104,17 +112,20 @@ class RpcServer(object):
         cmd = params["command"]
         if cmd in ("call", "signal"):
             # method must not block link loop
-            thr = threading.Thread(target=self.call_method, name="mqrpc_call",
-                                  args=(ident, params))
+            thr = threading.Thread(target=self.call_method,
+                    name="mqrpc_call;%s;%s" % (params["object"], params["method"]),
+                    args=(ident, params))
             thr.setDaemon(True)
             thr.start()
 
     ######################################################
 
     def call_method(self, ident, params):
-        self.log.debug("call_method ident=%r obj=%r method=%r" %
-                        (ident, params["object"], params["method"]))
-        # TODO better exception handling
+        if __debug__:
+            self.log.debug("%s method ident=%r obj=%r method=%r" %
+                   (params["command"], ident, params["object"], params["method"]))
+        
+        has_signal_attr = True  # implicit is no reply on exception
         try:
             objname = params["object"]
             try:
@@ -133,14 +144,13 @@ class RpcServer(object):
                 warnings.warn("wrong command match for %r" % method,
                               SignalCallWarning)
 
-            # TODO extra try/except for the call
             ret = method(*params["args"], **params["kwargs"])
 
             # signals have no return value
             if params["command"] == "call":
                 self.send_return(ident, params["req_id"], ret)
-        except Exception, exc:
-            if self.transmit_exceptions:
+        except StandardError, exc:
+            if self.transmit_exceptions and not has_signal_attr:
                 self.send_exception(ident, params["req_id"], exc)
             else:
                 raise
@@ -148,6 +158,8 @@ class RpcServer(object):
     ######################################################
 
     def send_exception(self, ident, req_id, exc):
+        if __debug__:
+            self.log.debug("send_exception ident=%r" % ident)
         traceb = traceback.format_exc()
         data = {"ok": False, "exception": (exc, traceb), "req_id": req_id}
         self.send(ident, data)
@@ -155,6 +167,8 @@ class RpcServer(object):
     ######################################################
 
     def send_return(self, ident, req_id, res):
+        if __debug__:
+            self.log.debug("send_return ident=%r" % ident)
         data = {"ok": True, "return": res, "req_id": req_id}
         self.send(ident, data)
 
@@ -277,6 +291,8 @@ class RpcClient(object):
 
     def on_recv(self, dummy_conn_id, dummy_ident, message):
         res = pickle.loads(message.data[len(REPLY_PREFIX):])
+        if __debug__:
+            self.log.debug("reply req_id=%r" % to_hex(res["req_id"]))
         with self.cond:
             self.results[res["req_id"]] = res
             self.cond.notify_all()
@@ -284,9 +300,10 @@ class RpcClient(object):
     ######################################################
 
     def remote_request(self, remote_ident, params, signal_timeout):
-        self.log.debug("remote_request ident=%r obj=%r method=%r" %
-                        (remote_ident, params["object"], params["method"]))
         req_id = params["req_id"]
+        if __debug__:
+            self.log.debug("remote_request ident=%r obj=%r method=%r req_id=%s" %
+                (remote_ident, params["object"], params["method"], to_hex(req_id)))
 
         if signal_timeout is None:
             # repeat request until it is replied
