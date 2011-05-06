@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Windows implementation of poll() does not accept file descriptors.
-SnakeMQ need libev.
+SnakeMQ needs libev.
 """
 
 import os
