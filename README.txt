@@ -1,7 +1,7 @@
 SnakeMQ is a small cross-platform Python library for easy and reliable
 communication between hosts.
 
-Features:
+Features
 ========
   * cross-platform - tested under Linux and MS Windows
   * symmetrical - single TCP connection for duplex communication
