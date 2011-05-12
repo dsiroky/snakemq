@@ -13,11 +13,11 @@ import time
 import bisect
 import logging
 
-if hasattr(select, "epoll"):
-    epoll = select.epoll
-else:
+if os.name == "nt":
     import winpoll
     epoll = winpoll.Epoll
+else:
+    epoll = select.epoll
 
 from snakemq.pollbell import Bell
 from snakemq.callbacks import Callback
@@ -27,7 +27,7 @@ from snakemq.callbacks import Callback
 
 RECONNECT_INTERVAL = 3.0
 RECV_BLOCK_SIZE = 256 * 1024
-POLL_TIMEOUT = 0.1
+POLL_TIMEOUT = 0.2
 BELL_READ = 1024
 
 ############################################################################

@@ -6,7 +6,6 @@
 """
 
 import os
-import fcntl
 import errno
 import threading
 
@@ -100,7 +99,15 @@ class TestLink(utils.TestCase):
 
     ########################################################
 
-    def test_bell(self):
+    def test_bell_pipe(self):
+        link = snakemq.link.Link()
+        buf = "abc"
+        link._poll_bell.write(buf)
+        self.assertEqual(link._poll_bell.read(len(buf)), buf)
+
+    ########################################################
+
+    def test_bell_wakeup(self):
         """
         Bell must fire event only on wake up call. Otherwise it must block the
         poll.
@@ -112,12 +119,13 @@ class TestLink(utils.TestCase):
         self.assertEqual(len(link.loop_pass(0)), 0)
         
         link.wakeup_poll()
-        self.assertEqual(link.loop_pass(0)[0][0], bell_rd)
+        fds = link.loop_pass(1.0)
+        self.assertEqual(len(fds), 1)
+        self.assertEqual(fds[0][0], bell_rd)
 
         # make sure that the pipe is flushed after wakeup
-        fcntl.fcntl(bell_rd, fcntl.F_SETFL, os.O_NONBLOCK)
         try:
-            os.read(bell_rd, 1)
+            link._poll_bell.read(1)
         except OSError, exc:
             self.assertEqual(exc.errno, errno.EAGAIN)
         else:
