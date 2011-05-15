@@ -56,10 +56,10 @@ class Messaging(object):
         self.log = logging.getLogger("snakemq.messaging")
 
         #{ callbacks
-        self.on_error = Callback(single=False)  #: C{func(conn_id, exception)}
+        self.on_error = Callback()  #: C{func(conn_id, exception)}
         self.on_message_recv = Callback()  #: C{func(conn_id, ident, message)}
-        self.on_connect = Callback(single=False)  #: C{func(conn_id, ident)}
-        self.on_disconnect = Callback(single=False)  #: C{func(conn_id, ident)}
+        self.on_connect = Callback()  #: C{func(conn_id, ident)}
+        self.on_disconnect = Callback()  #: C{func(conn_id, ident)}
         #}
 
         self._ident_by_conn = {}

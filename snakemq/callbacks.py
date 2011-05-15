@@ -10,29 +10,13 @@ Simple callbacks helper.
 ###########################################################################
 ###########################################################################
 
-class CallbackPresent(Exception):
-    pass
-
-###########################################################################
-###########################################################################
-
 class Callback(object):
-    def __init__(self, single=True):
-        """
-        @param single: if True then only a single callback function can be
-                      assigned.
-        """
-        self.single = single
+    def __init__(self):
         self.callbacks = set()
 
     ####################################################
 
     def add(self, func):
-        """
-        @raises CallbackPresent: if self.single and callback is already added
-        """
-        if (len(self.callbacks) > 0) and self.single:
-            raise CallbackPresent()
         self.callbacks.add(func)
 
     ####################################################
@@ -43,5 +27,5 @@ class Callback(object):
     ####################################################
 
     def __call__(self, *args, **kwargs):
-        for callback in self.callbacks:
+        for callback in list(self.callbacks):
             callback(*args, **kwargs)

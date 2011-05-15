@@ -7,7 +7,6 @@ sys.path.insert(0, "../")
 import threading
 import time
 import logging
-import cProfile as profile
 
 import snakemq
 import snakemq.link
@@ -32,7 +31,7 @@ def f():
                 print proxy.get_fo()
             except Exception, exc:
                 print "remote traceback", str(exc.__remote_traceback__)
-            sys.exit()
+            s.stop()
         time.sleep(2)
 
 snakemq.init_logging()
@@ -62,4 +61,4 @@ proxy = crpc.get_proxy("boss", "abc")
 proxy.as_signal("mysignal", 10)
 proxy.mysignal()
 
-s.loop(count=1000)
+s.loop()

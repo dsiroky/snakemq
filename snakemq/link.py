@@ -47,13 +47,13 @@ class Link(object):
         self.recv_block_size = RECV_BLOCK_SIZE
 
         #{ callbacks
-        self.on_connect = Callback(single=False)  #: C{func(conn_id)}
-        self.on_disconnect = Callback(single=False)  #: C{func(conn_id)}
+        self.on_connect = Callback()  #: C{func(conn_id)}
+        self.on_disconnect = Callback()  #: C{func(conn_id)}
         self.on_recv = Callback()  #: C{func(conn_id, data)}
         #: C{func(conn_id)}, last send was successful
         self.on_ready_to_send = Callback()
         #: C{func()}, called after poll is processed
-        self.on_loop_pass = Callback(single=False)
+        self.on_loop_pass = Callback()
         #}
 
         self._do_loop = False  #: False breaks the loop

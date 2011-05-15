@@ -36,4 +36,4 @@ rh = snakemq.messaging.ReceiveHook(m)
 srpc = rpc.RpcServer(rh)
 srpc.register_object(A(), "abc")
 
-s.loop(count=1000)
+s.loop()

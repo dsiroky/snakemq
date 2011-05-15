@@ -90,12 +90,12 @@ class Packeter(object):
         self.log = logging.getLogger("snakemq.packeter")
 
         #{ callbacks
-        self.on_connect = Callback(single=False)  #: C{func(conn_id)}
-        self.on_disconnect = Callback(single=False)  #: C{func(conn_id)}
+        self.on_connect = Callback()  #: C{func(conn_id)}
+        self.on_disconnect = Callback()  #: C{func(conn_id)}
         self.on_packet_recv = Callback()  #: C{func(conn_id, packet)}
         #: C{func(conn_id, packet_id)}, just a signal when a packet was fully sent
         self.on_packet_sent = Callback()
-        self.on_error = Callback(single=False)  #: C{func(conn_id, exception)}
+        self.on_error = Callback()  #: C{func(conn_id, exception)}
         #}
 
         self._connections = {}  # conn_id:ConnectionInfo
