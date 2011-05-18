@@ -42,7 +42,8 @@ load-plugins=
 # R0904 Too many public methods
 # W0142 Used * or ** magic
 # I0011 Locally disabling
-disable=C0111,R0801,R0901,R0902,R0903,R0904,W0142,I0011
+# W0703 Catch "Exception"
+disable=C0111,R0801,R0901,R0902,R0903,R0904,W0142,I0011,W0703
 
 
 [REPORTS]

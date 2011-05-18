@@ -14,8 +14,8 @@ import bisect
 import logging
 
 if os.name == "nt":
-    import winpoll
-    epoll = winpoll.Epoll
+    from snakemq.winpoll import Epoll
+    epoll = Epoll
 else:
     epoll = select.epoll
 
@@ -400,7 +400,7 @@ class Link(object):
     def handle_fd_mask(self, fd, mask):
         if fd == self._poll_bell.r:
             assert mask & select.EPOLLIN
-            bell_data = self._poll_bell.read(BELL_READ)  # flush the pipe
+            self._poll_bell.read(BELL_READ)  # flush the pipe
         else:
             # socket might have been already discarded by the Link
             # so this pass might be skipped

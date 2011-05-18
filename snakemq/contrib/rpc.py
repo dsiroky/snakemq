@@ -117,7 +117,7 @@ class RpcServer(object):
         if __debug__:
             self.log.debug("%s method ident=%r obj=%r method=%r" %
                    (params["command"], ident, params["object"], params["method"]))
-        
+
         has_signal_attr = True  # implicit is no reply on exception
         try:
             objname = params["object"]

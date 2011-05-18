@@ -45,7 +45,7 @@ class Epoll(object):
             if mask & select.EPOLLOUT:
                 wlist.append(fd)
             xlist.append(fd)
-        
+
         rlist, wlist, xlist = select.select(rlist, wlist, xlist, timeout)
 
         res = {}

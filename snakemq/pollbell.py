@@ -4,6 +4,7 @@ Link loop poll interruptor.
 
 Read part must be nonblocking.
 """
+# pylint: disable=C0103
 
 import os
 import socket
