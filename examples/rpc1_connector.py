@@ -18,19 +18,19 @@ from snakemq.contrib import rpc
 
 class B(object):
     def wer(self):
-        print "wer"
+        print("wer")
 
 def f():
     time.sleep(1)
     c = None
     while True:
-        if m._conn_by_ident.keys():
+        if list(m._conn_by_ident.keys()):
             c = 1
         if c:
             try:
-                print proxy.get_fo()
-            except Exception, exc:
-                print "remote traceback", str(exc.__remote_traceback__)
+                print(proxy.get_fo())
+            except Exception as exc:
+                print("remote traceback", str(exc.__remote_traceback__))
             s.stop()
         time.sleep(2)
 

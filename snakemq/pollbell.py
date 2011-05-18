@@ -59,7 +59,7 @@ class WinBell(BellBase):
     def read(self, num):
         try:
             return self.sr.recv(num)
-        except socket.error, exc:
+        except socket.error as exc:
             # emulate os.read exception
             if exc.errno == errno.WSAEWOULDBLOCK:
                 new_exc = OSError()

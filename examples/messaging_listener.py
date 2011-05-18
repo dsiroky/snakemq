@@ -13,7 +13,7 @@ import snakemq.messaging
 import snakemq.message
 
 def on_recv(conn, ident, message):
-    print "received from", conn, ident, message
+    print("received from", conn, ident, message)
 
 snakemq.init_logging()
 logger = logging.getLogger("snakemq")
@@ -27,7 +27,7 @@ pktr = snakemq.packeter.Packeter(s)
 m = snakemq.messaging.Messaging("xlistener", "", pktr)
 m.on_message_recv.add(on_recv)
 
-msg = snakemq.message.Message("hello", ttl=60)
+msg = snakemq.message.Message(b"hello", ttl=60)
 m.send_message("xconnector", msg)
 
 s.loop()

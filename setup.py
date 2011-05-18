@@ -17,5 +17,7 @@ setup(name="snakeMQ",
           "License :: OSI Approved :: MIT License",
           "Topic :: System :: Networking"
         ],
-      packages=["snakemq"]
+      packages=["snakemq"],
+      tests_require=["nose"],
+      test_suite="nose.collector"
     )

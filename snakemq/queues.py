@@ -11,6 +11,7 @@ disconnected time.  Queue manager "downtime" is not included.
 import time
 import sqlite3
 from collections import defaultdict, deque
+from binascii import b2a_base64, a2b_base64
 
 from snakemq.message import Message, FLAG_PERSISTENT
 
@@ -211,7 +212,7 @@ class SqliteQueuesStorage(QueuesStorage):
     def prepare_format(self):
         with self.conn:
             self.crs.execute("""CREATE TABLE items (queue_name TEXT, uuid TEXT,
-                                        data TEXT, ttl REAL, flags INTEGER)""")
+                                        data BLOB, ttl REAL, flags INTEGER)""")
 
     ####################################################
 
@@ -233,8 +234,11 @@ class SqliteQueuesStorage(QueuesStorage):
                           (queue_name,))
         items = []
         for res in self.crs.fetchall():
-            items.append(Message(uuid=res[0].decode("base64"),
-                                data=res[1],
+            data = res[1]
+            if type(data) != bytes:
+                data = bytes(data)  # XXX python2 hack
+            items.append(Message(uuid=a2b_base64(res[0]),
+                                data=data,
                                 ttl=res[2],
                                 flags=res[3]))
         return items
@@ -246,7 +250,7 @@ class SqliteQueuesStorage(QueuesStorage):
             self.crs.execute("""INSERT INTO items
                                     (queue_name, uuid, data, ttl, flags)
                                     VALUES (?, ?, ?, ?, ?)""",
-                          (queue_name, item.uuid.encode("base64"), item.data,
+                          (queue_name, b2a_base64(item.uuid), item.data,
                           item.ttl, item.flags))
 
     ####################################################
@@ -256,7 +260,7 @@ class SqliteQueuesStorage(QueuesStorage):
         with self.conn:
             for item in items:
                 self.crs.execute("""DELETE FROM items WHERE uuid = ?""",
-                              (item.uuid.encode("base64"),))
+                              (b2a_base64(item.uuid),))
 
     ####################################################
 
@@ -264,7 +268,7 @@ class SqliteQueuesStorage(QueuesStorage):
         with self.conn:
             for item in items:
                 self.crs.execute("""UPDATE items SET ttl = ? WHERE uuid = ?""",
-                          (item.ttl, item.uuid.encode("base64")))
+                          (item.ttl, b2a_base64(item.uuid)))
 
 ###########################################################################
 ###########################################################################

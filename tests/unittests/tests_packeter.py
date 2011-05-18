@@ -45,7 +45,7 @@ class TestPacketer(utils.TestCase):
     ########################################################
 
     def test_multiple_small_packets(self):
-        to_send = ["ab", "cde", "fg", "hijk"]
+        to_send = [b"ab", b"cde", b"fg", b"hijk"]
         container = {"received": []}
 
         def server(link, packeter):
@@ -71,7 +71,11 @@ class TestPacketer(utils.TestCase):
 
             packeter.on_connect = on_connect
             packeter.on_disconnect = on_disconnect
-            link.loop(runtime=0.5)
+            try:
+                link.loop(runtime=0.5)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
 
         self.run_srv_cli(server, client)
         self.assertEqual(to_send, container["received"])
@@ -79,7 +83,7 @@ class TestPacketer(utils.TestCase):
     ########################################################
 
     def test_large_packet(self):
-        to_send = "abcd" * 1000000 # something "big enough"
+        to_send = b"abcd" * 1000000 # something "big enough"
         container = {"received": None}
 
         def server(link, packeter):

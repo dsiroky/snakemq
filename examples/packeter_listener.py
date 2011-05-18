@@ -11,8 +11,8 @@ import snakemq.link
 import snakemq.packeter
 
 def on_recv(conn, packet):
-    print "received from", conn, packet
-    pktr.send_packet(conn, "hi")
+    print("received from", conn, packet)
+    pktr.send_packet(conn, b"hi")
 
 snakemq.init_logging()
 logger = logging.getLogger("snakemq")

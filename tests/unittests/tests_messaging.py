@@ -5,25 +5,29 @@
           U{http://www.opensource.org/licenses/mit-license.php})
 """
 
-import snakemq.messaging
+import mock
 
-import mocker
+import snakemq.messaging
 
 import utils
 
 #############################################################################
 #############################################################################
 
-class MockMessaging(object):
-    def __init__(self):
-        self.on_message_receive = None
+class TestMessaging(utils.TestCase):
+    def test_recv_frame_type(self):
+        packeter = mock.Mock()
+        messaging = snakemq.messaging.Messaging("someident", "", packeter)
+        with mock.patch_object(messaging, "parse_protocol_version") as parse_mock:
+            messaging._on_packet_recv("", messaging.frame_protocol_version())
+        self.assertEqual(parse_mock.call_count, 1)
 
 #############################################################################
 #############################################################################
 
 class TestReceiveHook(utils.TestCase):
     def setUp(self):
-        self.messaging = MockMessaging()
+        self.messaging = mock.Mock()
         self.hook = snakemq.messaging.ReceiveHook(self.messaging)
 
     def tearDown(self):

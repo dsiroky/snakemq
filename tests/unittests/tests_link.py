@@ -9,7 +9,7 @@ import os
 import errno
 import threading
 
-import mocker
+import mock
 
 import snakemq.link
 
@@ -60,7 +60,7 @@ class TestLink(utils.TestCase):
 
         def client(link):
             def on_connect(conn_id):
-                data = "abcd" * 1000000 # something "big enough"
+                data = b"abcd" * 1000000 # something "big enough"
                 size = link.send(conn_id, data)
                 container["sent"] = data[:size]
                 link.close(conn_id)
@@ -70,7 +70,7 @@ class TestLink(utils.TestCase):
             link.loop(runtime=0.5)
 
         self.run_srv_cli(server, client)
-        self.assertEqual(container["sent"], "".join(container["received"]))
+        self.assertEqual(container["sent"], b"".join(container["received"]))
 
     ########################################################
 
@@ -101,7 +101,7 @@ class TestLink(utils.TestCase):
 
     def test_bell_pipe(self):
         link = snakemq.link.Link()
-        buf = "abc"
+        buf = b"abc"
         link._poll_bell.write(buf)
         self.assertEqual(link._poll_bell.read(len(buf)), buf)
 
@@ -126,7 +126,7 @@ class TestLink(utils.TestCase):
         # make sure that the pipe is flushed after wakeup
         try:
             link._poll_bell.read(1)
-        except OSError, exc:
+        except OSError as exc:
             self.assertEqual(exc.errno, errno.EAGAIN)
         else:
             self.fail()
@@ -139,7 +139,7 @@ class TestLink(utils.TestCase):
         """
         def server(link):
             def on_connect(conn_id):
-                link.send(conn_id, "a")
+                link.send(conn_id, b"a")
 
             def on_disconnect(conn_id):
                 link.stop()
@@ -159,11 +159,10 @@ class TestLink(utils.TestCase):
             link.on_disconnect = on_disconnect
 
             # handle_close must be called only 1x
-            link_mocker = mocker.Mocker()
-            patched_link = link_mocker.patch(link)
-            mocker.expect(patched_link.handle_close(mocker.ANY))\
-                        .passthrough().count(1)
-            with link_mocker:
+            link_wrapper = mock.Mock(wraps=link)
+            with mock.patch_object(link, "handle_close",
+                                    link_wrapper.handle_close):
                 link.loop(runtime=0.5)
+            self.assertEqual(link_wrapper.handle_close.call_count, 1)
 
         self.run_srv_cli(server, client)

@@ -91,13 +91,13 @@ class Link(object):
         """
         assert not self._do_loop
 
-        for address in self._connectors.keys():
+        for address in list(self._connectors.keys()):
             self.del_connector(address)
 
-        for address in self._listen_socks.keys():
+        for address in list(self._listen_socks.keys()):
             self.del_listener(address)
 
-        for sock in self._sock_by_fd.values():
+        for sock in list(self._sock_by_fd.values()):
             self.handle_close(sock)
 
         # be sure that no memory is wasted
@@ -184,7 +184,7 @@ class Link(object):
         """
         Thread-safe.
         """
-        self._poll_bell.write("a")
+        self._poll_bell.write(b"a")
 
     ##########################################################
 
@@ -200,7 +200,7 @@ class Link(object):
             sock = self._sock_by_conn[conn_id]
             sent_length = sock.send(data)
             self.poller.modify(sock, select.EPOLLIN | select.EPOLLOUT)
-        except socket.error, exc:
+        except socket.error as exc:
             err = exc.args[0]
             if err == errno.EWOULDBLOCK:
                 return 0
@@ -322,7 +322,7 @@ class Link(object):
     def handle_accept(self, sock):
         try:
             newsock, address = sock.accept()
-        except socket.error, exc:
+        except socket.error as exc:
             self.log.error("accept %r: %r" % (sock, exc))
             return
         newsock.setblocking(0)
@@ -346,7 +346,7 @@ class Link(object):
                 self.on_recv(conn_id, fragment)
             else:
                 self.handle_close(sock)
-        except socket.error, exc:
+        except socket.error as exc:
             err = exc.args[0]
             if err in (errno.ECONNRESET, errno.ENOTCONN, errno.ESHUTDOWN,
                         errno.ECONNABORTED, errno.EPIPE, errno.EBADF):
@@ -434,7 +434,7 @@ class Link(object):
         fds = []
         try:
             fds = self.poller.poll(poll_timeout)
-        except IOError, exc:
+        except IOError as exc:
             if exc.errno != errno.EINTR:  # hibernate does that
                 raise
 

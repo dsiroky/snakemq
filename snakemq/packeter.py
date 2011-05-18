@@ -115,6 +115,7 @@ class Packeter(object):
         Queue data to be sent over the link.
         @return: packet id
         """
+        assert type(buf) == bytes
         conn = self._connections[conn_id]
 
         self._last_packet_id += 1
@@ -148,7 +149,7 @@ class Packeter(object):
         recv_buffer.put(buf)
         try:
             packets = recv_buffer.get_packets()
-        except SnakeMQBrokenPacket, exc:
+        except SnakeMQBrokenPacket as exc:
             self.log.error("conn=%s %r" % (conn_id, exc))
             self.on_error(conn_id, exc)
             self.link.close(conn_id)

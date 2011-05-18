@@ -29,11 +29,24 @@ import snakemq.version
 
 ############################################################################
 ############################################################################
+# py2/3
+############################################################################
 
-FRAME_TYPE_PROTOCOL_VERSION = "\x00"
-FRAME_TYPE_INCOMPATIBLE_PROTOCOL = "\x01"
-FRAME_TYPE_IDENTIFICATION = "\x02"
-FRAME_TYPE_MESSAGE = "\x03"
+try:
+    memoryview
+except NameError:
+    memoryview = buffer
+
+############################################################################
+############################################################################
+
+FRAME_TYPE_PROTOCOL_VERSION = 0
+FRAME_TYPE_INCOMPATIBLE_PROTOCOL = 1
+FRAME_TYPE_IDENTIFICATION = 2
+FRAME_TYPE_MESSAGE = 3
+
+FRAME_TYPE_TYPE = "B"
+FRAME_TYPE_SIZE = 1  # 1 byte
 
 FRAME_FORMAT_PROTOCOL_VERSION = "!I"
 FRAME_FORMAT_PROTOCOL_VERSION_SIZE = struct.calcsize(FRAME_FORMAT_PROTOCOL_VERSION)
@@ -43,6 +56,8 @@ FRAME_FORMAT_MESSAGE_SIZE = struct.calcsize(FRAME_FORMAT_MESSAGE)
 MIN_FRAME_SIZE = 1  # just the type field
 
 MESSAGE_FLAG_PERSISTENT = 0x1  #: deliver at all cost (queue to disk as well)
+
+ENCODING = "utf-8"
 
 #############################################################################
 #############################################################################
@@ -112,6 +127,7 @@ class Messaging(object):
     ###########################################################
 
     def parse_identification(self, remote_ident, conn_id):
+        remote_ident = remote_ident.decode(ENCODING, "replace")
         self.log.debug("conn=%s remote ident '%s'" % (conn_id, remote_ident))
 
         if conn_id in self._ident_by_conn:
@@ -132,7 +148,7 @@ class Messaging(object):
 
         muuid, ttl, flags = struct.unpack(FRAME_FORMAT_MESSAGE,
                                           payload[:FRAME_FORMAT_MESSAGE_SIZE])
-        message = Message(data=payload[FRAME_FORMAT_MESSAGE_SIZE:],
+        message = Message(data=bytes(payload[FRAME_FORMAT_MESSAGE_SIZE:]),
                           uuid=muuid, ttl=ttl, flags=flags)
         self.on_message_recv(conn_id, self._ident_by_conn[conn_id], message)
 
@@ -143,9 +159,8 @@ class Messaging(object):
             if len(packet) < MIN_FRAME_SIZE:
                 raise SnakeMQBrokenMessage("too small")
 
-            frame_type = packet[0]
-            payload = packet[1:]
-            del packet
+            frame_type = ord(packet[:FRAME_TYPE_SIZE])
+            payload = memoryview(packet)[FRAME_TYPE_SIZE:]
 
             # TODO allow parse_* calls only after protocol version negotiation
             if frame_type == FRAME_TYPE_PROTOCOL_VERSION:
@@ -153,10 +168,10 @@ class Messaging(object):
             elif frame_type == FRAME_TYPE_INCOMPATIBLE_PROTOCOL:
                 self.parse_incompatible_protocol(conn_id)
             elif frame_type == FRAME_TYPE_IDENTIFICATION:
-                self.parse_identification(payload, conn_id)
+                self.parse_identification(bytes(payload), conn_id)
             elif frame_type == FRAME_TYPE_MESSAGE:
                 self.parse_message(payload, conn_id)
-        except SnakeMQException, exc:
+        except SnakeMQException as exc:
             self.log.error("conn=%s ident=%s %r" %
                   (conn_id, self._ident_by_conn.get(conn_id), exc))
             self.on_error(conn_id, exc)
@@ -164,34 +179,43 @@ class Messaging(object):
 
     ###########################################################
 
+    def frame_protocol_version(self):
+        return (struct.pack(FRAME_TYPE_TYPE, FRAME_TYPE_PROTOCOL_VERSION) +
+                struct.pack(FRAME_FORMAT_PROTOCOL_VERSION,
+                            snakemq.version.PROTOCOL_VERSION))
+
     def send_protocol_version(self, conn_id):
-        self.packeter.send_packet(conn_id,
-            FRAME_TYPE_PROTOCOL_VERSION +
-            struct.pack(FRAME_FORMAT_PROTOCOL_VERSION,
-                        snakemq.version.PROTOCOL_VERSION))
+        self.packeter.send_packet(conn_id, self.frame_protocol_version())
 
     ###########################################################
+
+    def frame_incompatible_protocol(self):
+        return struct.pack(FRAME_TYPE_TYPE, FRAME_TYPE_INCOMPATIBLE_PROTOCOL)
 
     def send_incompatible_protocol(self, conn_id):
-        self.packeter.send_packet(conn_id,
-            FRAME_TYPE_INCOMPATIBLE_PROTOCOL)
+        self.packeter.send_packet(conn_id, self.frame_incompatible_protocol())
 
     ###########################################################
+
+    def frame_identification(self):
+        return (struct.pack(FRAME_TYPE_TYPE, FRAME_TYPE_IDENTIFICATION) +
+                self.identifier.encode(ENCODING))
 
     def send_identification(self, conn_id):
-        self.packeter.send_packet(conn_id,
-            FRAME_TYPE_IDENTIFICATION + self.identifier)
+        self.packeter.send_packet(conn_id, self.frame_identification())
 
     ###########################################################
 
+    def frame_message(self, message):
+        return (struct.pack(FRAME_TYPE_TYPE, FRAME_TYPE_MESSAGE) +
+                struct.pack(FRAME_FORMAT_MESSAGE,
+                            message.uuid,
+                            int(message.ttl),
+                            message.flags) +
+                message.data)
+
     def send_message_frame(self, conn_id, message):
-        self.packeter.send_packet(conn_id,
-            FRAME_TYPE_MESSAGE +
-            struct.pack(FRAME_FORMAT_MESSAGE,
-                        message.uuid,
-                        int(message.ttl),
-                        message.flags) +
-            message.data)
+        self.packeter.send_packet(conn_id, self.frame_message(message))
 
     ###########################################################
 

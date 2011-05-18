@@ -6,11 +6,12 @@
 """
 
 import traceback
-import cPickle as pickle
+import pickle
 import threading
 import uuid
 import warnings
 import logging
+from binascii import b2a_hex
 
 from snakemq.message import Message
 
@@ -19,8 +20,8 @@ from snakemq.message import Message
 # constants
 ###############################################################################
 
-REQUEST_PREFIX = "rpcreq"
-REPLY_PREFIX = "rpcrep"
+REQUEST_PREFIX = b"rpcreq"
+REPLY_PREFIX = b"rpcrep"
 
 METHOD_RPC_AS_SIGNAL_ATTR = "__snakemw_rpc_as_signal"
 
@@ -31,7 +32,7 @@ REMOTE_TRACEBACK_ATTR = "__remote_traceback__"
 # exceptions and warnings
 ###############################################################################
 
-class Error(StandardError):
+class Error(Exception):
     pass
 
 class NoInstanceError(Error):
@@ -45,14 +46,6 @@ class NoMethodError(Error):
 class SignalCallWarning(Warning):
     """ signal method called normally or regular method called as signal """
     pass
-
-###############################################################################
-###############################################################################
-# support functions
-###############################################################################
-
-def to_hex(buf):
-    return "".join(["%02X" % ord(c) for c in buf])
 
 ###############################################################################
 ###############################################################################
@@ -149,7 +142,7 @@ class RpcServer(object):
             # signals have no return value
             if params["command"] == "call":
                 self.send_return(ident, params["req_id"], ret)
-        except StandardError, exc:
+        except Exception as exc:
             if self.transmit_exceptions and not has_signal_attr:
                 self.send_exception(ident, params["req_id"], exc)
             else:
@@ -199,7 +192,7 @@ class RemoteMethod(object):
 
         try:
             params = {
-                  "req_id": uuid.uuid4().bytes,
+                  "req_id": bytes(uuid.uuid4().bytes),
                   "command": command,
                   "object": self.iproxy._name,
                   "method": self.name,
@@ -208,7 +201,7 @@ class RemoteMethod(object):
                 }
             ident = self.iproxy._remote_ident
             return self.iproxy._client.remote_request(ident, params, timeout)
-        except Exception, exc:
+        except Exception as exc:
             ehandler = self.iproxy._client.exception_handler
             if ehandler is None:
                 raise
@@ -292,7 +285,7 @@ class RpcClient(object):
     def on_recv(self, dummy_conn_id, dummy_ident, message):
         res = pickle.loads(message.data[len(REPLY_PREFIX):])
         if __debug__:
-            self.log.debug("reply req_id=%r" % to_hex(res["req_id"]))
+            self.log.debug("reply req_id=%r" % b2a_hex(res["req_id"]))
         with self.cond:
             self.results[res["req_id"]] = res
             self.cond.notify_all()
@@ -303,7 +296,7 @@ class RpcClient(object):
         req_id = params["req_id"]
         if __debug__:
             self.log.debug("remote_request ident=%r obj=%r method=%r req_id=%s" %
-                (remote_ident, params["object"], params["method"], to_hex(req_id)))
+                (remote_ident, params["object"], params["method"], b2a_hex(req_id)))
 
         if signal_timeout is None:
             # repeat request until it is replied

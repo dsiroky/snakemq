@@ -7,7 +7,7 @@
 
 import os
 
-from mocker import Mocker
+import mock
 
 from snakemq.queues import MemoryQueuesStorage, SqliteQueuesStorage, QueuesManager
 from snakemq.message import Message, FLAG_PERSISTENT
@@ -39,8 +39,8 @@ class TestQueue(utils.TestCase):
         """
         queue = self.queues_manager.get_queue("testqueue")
         queue.connect()
-        queue.push(Message("data a", "a"))
-        queue.push(Message("data b", "b"))
+        queue.push(Message(b"data a", "a"))
+        queue.push(Message(b"data b", "b"))
         self.assertEqual(len(queue), 2)
         self.assertEqual(queue.get().uuid, "a")
         self.assertEqual(queue.get().uuid, "a") # must be the same
@@ -58,16 +58,12 @@ class TestQueue(utils.TestCase):
         Push 2 items, one will expire on connect.
         """
         queue = self.queues_manager.get_queue("testqueue")
-        mocker = Mocker()
-        obj = mocker.replace("time.time")
-        obj()
-        mocker.result(0)
-        obj()
-        mocker.result(3)
-        with mocker:
+        with mock.patch("time.time") as time_mock:
+            time_results = iter([0, 3])
+            time_mock.side_effect = lambda: next(time_results)
             queue.disconnect()
-            queue.push(Message("data a", "a", ttl=1))
-            queue.push(Message("data b", "b", ttl=5))
+            queue.push(Message(b"data a", "a", ttl=1))
+            queue.push(Message(b"data b", "b", ttl=5))
             queue.connect()
             self.assertEqual(len(queue), 1)
             self.assertEqual(queue.get().uuid, "b")
@@ -81,11 +77,11 @@ class TestQueue(utils.TestCase):
         queue = self.queues_manager.get_queue("testqueue")
 
         # disconnected
-        queue.push(Message("data a", "a", ttl=0))
+        queue.push(Message(b"data a", "a", ttl=0))
         self.assertEqual(len(queue), 0)
 
         queue.connect()
-        queue.push(Message("data a", "a", ttl=0))
+        queue.push(Message(b"data a", "a", ttl=0))
         self.assertEqual(len(queue), 1)
 
     ##################################################################
@@ -96,9 +92,9 @@ class TestQueue(utils.TestCase):
         """
         queue = self.queues_manager.get_queue("testqueue")
         queue.connect()
-        queue.push(Message("data a", "a", ttl=1, flags=FLAG_PERSISTENT))
-        queue.push(Message("data b", "b"))
-        queue.push(Message("data c", "c", ttl=1, flags=FLAG_PERSISTENT))
+        queue.push(Message(b"data a", "a", ttl=1, flags=FLAG_PERSISTENT))
+        queue.push(Message(b"data b", "b"))
+        queue.push(Message(b"data c", "c", ttl=1, flags=FLAG_PERSISTENT))
         self.assertEqual(len(queue), 3)
         stored_items = self.queues_manager.storage.get_items("testqueue")
         self.assertEqual(len(stored_items), 2)
@@ -124,13 +120,13 @@ class TestQueue(utils.TestCase):
         """
         queue1 = self.queues_manager.get_queue("testqueue1")
         queue1.connect()
-        queue1.push(Message("data a", "a", ttl=1, flags=FLAG_PERSISTENT))
-        queue1.push(Message("data b", "b", ttl=1, flags=FLAG_PERSISTENT))
-        queue1.push(Message("data c", "c", ttl=1, flags=FLAG_PERSISTENT))
+        queue1.push(Message(b"data a", "a", ttl=1, flags=FLAG_PERSISTENT))
+        queue1.push(Message(b"data b", "b", ttl=1, flags=FLAG_PERSISTENT))
+        queue1.push(Message(b"data c", "c", ttl=1, flags=FLAG_PERSISTENT))
         queue2 = self.queues_manager.get_queue("testqueue2")
         queue2.connect()
-        queue2.push(Message("data d", "d", ttl=1, flags=FLAG_PERSISTENT))
-        queue2.push(Message("data e", "e", ttl=1, flags=FLAG_PERSISTENT))
+        queue2.push(Message(b"data d", "d", ttl=1, flags=FLAG_PERSISTENT))
+        queue2.push(Message(b"data e", "e", ttl=1, flags=FLAG_PERSISTENT))
 
         self.queue_manager_restart()
 
@@ -147,21 +143,17 @@ class TestQueue(utils.TestCase):
     def test_persistency_ttl(self):
         queue = self.queues_manager.get_queue("testqueue")
         queue.connect()
-        queue.push(Message("data a", "a", ttl=1, flags=FLAG_PERSISTENT))
-        queue.push(Message("data b", "b"))
-        queue.push(Message("data c", "c", ttl=5, flags=FLAG_PERSISTENT))
+        queue.push(Message(b"data a", "a", ttl=1, flags=FLAG_PERSISTENT))
+        queue.push(Message(b"data b", "b"))
+        queue.push(Message(b"data c", "c", ttl=5, flags=FLAG_PERSISTENT))
         self.assertEqual(len(queue), 3)
 
         self.queue_manager_restart()
         queue = self.queues_manager.get_queue("testqueue")
 
-        mocker = Mocker()
-        obj = mocker.replace("time.time")
-        obj()
-        mocker.result(0)
-        obj()
-        mocker.result(3)
-        with mocker:
+        with mock.patch("time.time") as time_mock:
+            time_results = iter([0, 3])
+            time_mock.side_effect = lambda: next(time_results)
             queue.disconnect()
             self.assertEqual(len(queue), 2)
             queue.connect()
@@ -170,7 +162,7 @@ class TestQueue(utils.TestCase):
 ############################################################################
 ############################################################################
 
-class TestStorageMixin(object):
+class BaseTestStorageMixin(object):
     """
     Generic tests for L{QueuesStorage} derivatives.
     """
@@ -206,7 +198,7 @@ class TestStorageMixin(object):
 
     def test_persistency(self):
         self.assertEqual(len(self.storage.get_queues()), 0)
-        self.storage.push("q1", Message("a"))
+        self.storage.push("q1", Message(b"a"))
         self.assertEqual(len(self.storage.get_queues()), 1)
         self.assertEqual(len(self.storage.get_items("q2")), 0)
         self.assertEqual(len(self.storage.get_items("q1")), 1)
@@ -220,7 +212,7 @@ class TestStorageMixin(object):
     ####################################################
 
     def test_message_attributes_persistency(self):
-        old_msg = Message("a", ttl=100, flags=1234)
+        old_msg = Message(b"a", ttl=100, flags=1234)
         self.storage.push("q1", old_msg)
         self.storage.close()
 
@@ -234,7 +226,7 @@ class TestStorageMixin(object):
 ############################################################################
 ############################################################################
 
-class TestMemoryStorage(TestStorageMixin, utils.TestCase):
+class TestMemoryStorage(BaseTestStorageMixin, utils.TestCase):
     """
     Only "fake" persistency can be tested.
     """
@@ -252,7 +244,7 @@ class TestMemoryStorage(TestStorageMixin, utils.TestCase):
 ############################################################################
 ############################################################################
 
-class TestSqliteStorage(TestStorageMixin, utils.TestCase):
+class TestSqliteStorage(BaseTestStorageMixin, utils.TestCase):
     STORAGE_FILENAME = "/tmp/snakemq_testqueue.storage"
 
     def storage_factory(self):

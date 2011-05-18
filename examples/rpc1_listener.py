@@ -16,11 +16,11 @@ from snakemq.contrib import rpc
 
 class A(object):
     def get_fo(self):
-        return "xcv"
+        return "fo value"
 
     @rpc.as_signal
     def mysignal(self):
-        print "mysignal"
+        print("mysignal")
 
 snakemq.init_logging()
 logger = logging.getLogger("snakemq")

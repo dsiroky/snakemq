@@ -71,6 +71,7 @@ class StreamBuffer(object):
         If C{max_size} is set then C{len(data)} must not be longer then the maximal
         size.
         """
+        assert type(data) == bytes
         if not data:
             # do not insert an empty string
             return
@@ -141,7 +142,7 @@ class StreamBuffer(object):
                                   (self.size < self.max_size)):
                 self.not_full_cond.notify()
 
-        return "".join(retbuf)
+        return b"".join(retbuf)
 
     ############################################################
 
