@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 from snakemq import version
 
@@ -17,7 +17,7 @@ setup(name="snakeMQ",
           "License :: OSI Approved :: MIT License",
           "Topic :: System :: Networking"
         ],
-      packages=["snakemq"],
+      packages=find_packages(),
       tests_require=["nose"],
       test_suite="nose.collector"
     )
