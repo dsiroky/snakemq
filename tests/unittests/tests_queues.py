@@ -6,14 +6,21 @@
 """
 
 import os
+import warnings
 
 import mock
 
 from snakemq.queues import QueuesManager
 from snakemq.storage import MemoryQueuesStorage 
 from snakemq.storage.sqlite import SqliteQueuesStorage
-from snakemq.storage.mongodb import MongoDbQueuesStorage
 from snakemq.message import Message, FLAG_PERSISTENT
+
+try:
+    from snakemq.storage.mongodb import MongoDbQueuesStorage
+    has_mongodb = True
+except ImportError:
+    has_mongodb = False
+    warnings.warn("missing MondoDB support", RuntimeWarning)
 
 import utils
 
@@ -179,6 +186,9 @@ class BaseTestStorageMixin(object):
     ####################################################
 
     def tearDown(self):
+        if self.storage:
+            self.storage.delete_all()
+            self.storage.close()
         self.delete_storage()
 
     ####################################################
@@ -266,8 +276,6 @@ class TestSqliteStorage(BaseTestStorageMixin, utils.TestCase):
         self.storage = SqliteQueuesStorage(TestSqliteStorage.STORAGE_FILENAME)
 
     def delete_storage(self):
-        if self.storage:
-            self.storage.close()
         if os.path.isfile(TestSqliteStorage.STORAGE_FILENAME):
             os.unlink(TestSqliteStorage.STORAGE_FILENAME)
 
@@ -275,10 +283,11 @@ class TestSqliteStorage(BaseTestStorageMixin, utils.TestCase):
 ############################################################################
 
 class TestMongoDbStorage(BaseTestStorageMixin, utils.TestCase):
+    __test__ = has_mongodb
+
     def storage_factory(self):
         self.storage = MongoDbQueuesStorage()
 
     def delete_storage(self):
-        if self.storage:
-            self.storage.delete_all()
-            self.storage.close()
+        # nothing to delete
+        pass

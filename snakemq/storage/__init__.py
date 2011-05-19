@@ -33,6 +33,12 @@ class QueuesStorageBase(object):
     def delete_items(self, items):
         raise NotImplementedError
 
+    def delete_all(self):
+        """
+        Delete all items and queues.
+        """
+        raise NotImplementedError
+
     def update_items_ttl(self, items):
         raise NotImplementedError
 
@@ -65,6 +71,9 @@ class MemoryQueuesStorage(QueuesStorageBase):
                     queue.remove(item)
                 except ValueError:
                     pass
+
+    def delete_all(self):
+        self.queues.clear()
 
     def update_items_ttl(self, items):
         # TTLs are already updated by the caller

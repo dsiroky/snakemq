@@ -26,11 +26,6 @@ class MongoDbQueuesStorage(QueuesStorageBase):
 
     ####################################################
 
-    def delete_all(self):
-        self.all_items.remove()
-
-    ####################################################
-
     def close(self):
         self.conn.disconnect()
         self.conn = None
@@ -70,6 +65,11 @@ class MongoDbQueuesStorage(QueuesStorageBase):
     def delete_items(self, items):
         for item in items:
             self.all_items.remove({"uuid": b2a_base64(item.uuid)})
+
+    ####################################################
+
+    def delete_all(self):
+        self.all_items.remove()
 
     ####################################################
 

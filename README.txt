@@ -9,6 +9,7 @@ Features
   * automatic reconnect
   * reliable delivery - configurable message role and delivery timeout
   * persistent/transient queues
+  * multiple storage options - SQLite, MongoDB, ...
   * brokerless - similar philosophy like ZeroMQ
   * layered design
   * open source - MIT License

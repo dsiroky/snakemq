@@ -7,12 +7,14 @@
 """
 
 import sys
+import os
+
 import nose
 
-sys.path.insert(0, "../..")
+sys.path.insert(0, os.path.realpath(os.path.join(os.path.dirname(__file__), "../..")))
 
 #############################################################################
 #############################################################################
 
 if __name__ == "__main__":
-    nose.run()
+    nose.run(argv=sys.argv)

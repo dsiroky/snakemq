@@ -6,10 +6,12 @@ SQLite queue storage.
 @license: MIT License (see LICENSE.txt)
 """
 
-import sqlite3
-from binascii import b2a_base64, a2b_base64
+from binascii import b2a_hex, a2b_hex
 
-from snakemq.message import Message
+import sqlite3
+
+from snakemq.message import Message, MAX_UUID_LENGTH
+from snakemq.messaging import MAX_IDENT_LENGTH
 from snakemq.storage import QueuesStorageBase
 
 ###########################################################################
@@ -17,11 +19,30 @@ from snakemq.storage import QueuesStorageBase
 
 class SqliteQueuesStorage(QueuesStorageBase):
     def __init__(self, filename):
-        self.filename = filename
-        self.conn = sqlite3.connect(self.filename)
+        self.conn = sqlite3.connect(filename)
         self.crs = self.conn.cursor()
         self.test_format()
         self.sweep()
+
+    ####################################################
+
+    def sweep(self):
+        with self.conn:
+            self.crs.execute("""VACUUM""")
+
+    ####################################################
+
+    def test_format(self):
+        """
+        Make sure that the database content is OK.
+        """
+        # just check if the table is present
+        try:
+            self.conn.rollback()
+            self.crs.execute("SELECT count(1) FROM items LIMIT 1")
+        except Exception:  # little bit vague
+            self.conn.rollback()
+            self.create_structures()
 
     ####################################################
 
@@ -35,27 +56,15 @@ class SqliteQueuesStorage(QueuesStorageBase):
 
     ####################################################
 
-    def test_format(self):
-        """
-        Make sure that the database file content is OK.
-        """
-        self.crs.execute("""SELECT count(1) FROM sqlite_master
-                                  WHERE type='table' AND name='items'""")
-        if self.crs.fetchone()[0] != 1:
-            self.prepare_format()
-
-    ####################################################
-
-    def prepare_format(self):
+    def create_structures(self):
         with self.conn:
-            self.crs.execute("""CREATE TABLE items (queue_name TEXT, uuid TEXT,
-                                        data BLOB, ttl REAL, flags INTEGER)""")
-
-    ####################################################
-
-    def sweep(self):
-        with self.conn:
-            self.crs.execute("""VACUUM""")
+            # UUID is stored as hex
+            self.crs.execute("""CREATE TABLE items (queue_name VARCHAR(%i),
+                                                    uuid VARCHAR(%i),
+                                                    data BLOB,
+                                                    ttl REAL,
+                                                    flags INTEGER)""" %
+                                    (MAX_IDENT_LENGTH, MAX_UUID_LENGTH * 2))
 
     ####################################################
 
@@ -71,10 +80,9 @@ class SqliteQueuesStorage(QueuesStorageBase):
                           (queue_name,))
         items = []
         for res in self.crs.fetchall():
-            data = res[1]
-            if type(data) != bytes:
-                data = bytes(data)  # XXX python2 hack
-            items.append(Message(uuid=a2b_base64(res[0]),
+            uuid = a2b_hex(res[0])  # XXX python2 hack
+            data = bytes(res[1])  # XXX python2 hack
+            items.append(Message(uuid=uuid,
                                 data=data,
                                 ttl=res[2],
                                 flags=res[3]))
@@ -87,17 +95,22 @@ class SqliteQueuesStorage(QueuesStorageBase):
             self.crs.execute("""INSERT INTO items
                                     (queue_name, uuid, data, ttl, flags)
                                     VALUES (?, ?, ?, ?, ?)""",
-                          (queue_name, b2a_base64(item.uuid), item.data,
+                          (queue_name, b2a_hex(item.uuid), item.data,
                           item.ttl, item.flags))
 
     ####################################################
 
     def delete_items(self, items):
-        # TODO use SQL operator "IN"
         with self.conn:
             for item in items:
                 self.crs.execute("""DELETE FROM items WHERE uuid = ?""",
-                              (b2a_base64(item.uuid),))
+                              (b2a_hex(item.uuid),))
+
+    ####################################################
+
+    def delete_all(self):
+        with self.conn:
+            self.crs.execute("DELETE FROM items")
 
     ####################################################
 
@@ -105,4 +118,4 @@ class SqliteQueuesStorage(QueuesStorageBase):
         with self.conn:
             for item in items:
                 self.crs.execute("""UPDATE items SET ttl = ? WHERE uuid = ?""",
-                          (item.ttl, b2a_base64(item.uuid)))
+                                  (item.ttl, b2a_hex(item.uuid)))

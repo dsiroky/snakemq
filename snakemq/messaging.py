@@ -41,6 +41,8 @@ except NameError:
 ############################################################################
 ############################################################################
 
+MAX_IDENT_LENGTH = 50
+
 FRAME_TYPE_PROTOCOL_VERSION = 0
 FRAME_TYPE_INCOMPATIBLE_PROTOCOL = 1
 FRAME_TYPE_IDENTIFICATION = 2
@@ -65,7 +67,7 @@ ENCODING = "utf-8"
 
 class Messaging(object):
     def __init__(self, identifier, domain, packeter, queues_storage=None):
-        self.identifier = identifier
+        self.identifier = identifier[:MAX_IDENT_LENGTH]
         self.domain = domain
         self.packeter = packeter
         self.queues_manager = QueuesManager(queues_storage)
