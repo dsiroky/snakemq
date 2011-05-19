@@ -9,7 +9,10 @@ import os
 
 import mock
 
-from snakemq.queues import MemoryQueuesStorage, SqliteQueuesStorage, QueuesManager
+from snakemq.queues import QueuesManager
+from snakemq.storage import MemoryQueuesStorage 
+from snakemq.storage.sqlite import SqliteQueuesStorage
+from snakemq.storage.mongodb import MongoDbQueuesStorage
 from snakemq.message import Message, FLAG_PERSISTENT
 
 import utils
@@ -196,6 +199,18 @@ class BaseTestStorageMixin(object):
 
     ####################################################
 
+    def test_get_queues_grouping(self):
+        self.storage.push("q1", Message(b"a"))
+        self.storage.push("q1", Message(b"a"))
+        self.storage.push("q2", Message(b"a"))
+        self.storage.push("q2", Message(b"a"))
+        self.storage.push("q1", Message(b"a"))
+        queues = self.storage.get_queues()
+        self.assertEqual(len(queues), 2)
+        self.assertEqual(set(queues), set(("q1", "q2")))
+
+    ####################################################
+
     def test_persistency(self):
         self.assertEqual(len(self.storage.get_queues()), 0)
         self.storage.push("q1", Message(b"a"))
@@ -255,3 +270,15 @@ class TestSqliteStorage(BaseTestStorageMixin, utils.TestCase):
             self.storage.close()
         if os.path.isfile(TestSqliteStorage.STORAGE_FILENAME):
             os.unlink(TestSqliteStorage.STORAGE_FILENAME)
+
+############################################################################
+############################################################################
+
+class TestMongoDbStorage(BaseTestStorageMixin, utils.TestCase):
+    def storage_factory(self):
+        self.storage = MongoDbQueuesStorage()
+
+    def delete_storage(self):
+        if self.storage:
+            self.storage.delete_all()
+            self.storage.close()

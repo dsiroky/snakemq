@@ -17,7 +17,7 @@ Build stack::
   my_packeter = snakemq.packeter.Packeter(my_link)
   my_messaging = snakemq.messaging.Messaging(MY_IDENT, "", my_packeter)
 
-where ``MY_IDENT`` is the peer identifier e.g. ``"bob"`` or ``"alice"``.
+where ``MY_IDENT`` is the peer identifier e.g. ``"bob"`` or ``"alice"``. Second parameter is *domain* used for routing - currently unused.
 
 Since the link is symmetrical it does not matter who is connecting and who is listening. Every link can have arbitrary count of listeners and connectors:
   
@@ -35,6 +35,8 @@ Since the link is symmetrical it does not matter who is connecting and who is li
 
     my_link.add_connector(("localhost", 4000))
     my_link.add_listener(("", 4001))
+
+After that connections are defined from everybody to each other.
 
 Run link loop (it drives the whole stack)::
 

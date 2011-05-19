@@ -23,7 +23,8 @@ import re
 
 from snakemq.exceptions import (SnakeMQBrokenMessage, SnakeMQException,
                                 SnakeMQIncompatibleProtocol)
-from snakemq.queues import QueuesManager, Message
+from snakemq.queues import QueuesManager
+from snakemq.message import Message
 from snakemq.callbacks import Callback
 import snakemq.version
 

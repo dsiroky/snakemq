@@ -1,19 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-Queues and persistent storage. TTL is decreased only by the
-disconnected time.  Queue manager "downtime" is not included.
+Queues, manager. TTL is decreased only by the disconnected time. Queue manager
+"downtime" is not included.
 
 @author: David Siroky (siroky@dasir.cz)
-@license: MIT License (see LICENSE.txt or
-          U{http://www.opensource.org/licenses/mit-license.php})
+@license: MIT License (see LICENSE.txt)
 """
 
 import time
-import sqlite3
-from collections import defaultdict, deque
-from binascii import b2a_base64, a2b_base64
+import logging
 
-from snakemq.message import Message, FLAG_PERSISTENT
+from snakemq.storage import QueuesStorageBase
+from snakemq.message import FLAG_PERSISTENT
 
 ###########################################################################
 ###########################################################################
@@ -113,165 +111,6 @@ class Queue(object):
 
 ###########################################################################
 ###########################################################################
-# storage
-###########################################################################
-
-class QueuesStorage(object):
-    def close(self):
-        raise NotImplementedError
-
-    def get_queues(self):
-        """
-        @return: list of queues names
-        """
-        raise NotImplementedError
-
-    def get_items(self, queue_name):
-        """
-        @return: items of the queue
-        """
-        raise NotImplementedError
-
-    def push(self, queue_name, item):
-        raise NotImplementedError
-
-    def delete_items(self, items):
-        raise NotImplementedError
-
-    def update_items_ttl(self, items):
-        raise NotImplementedError
-
-###########################################################################
-###########################################################################
-
-class MemoryQueuesStorage(QueuesStorage):
-    """
-    For testing purposes - B{THIS STORAGE IS NOT PERSISTENT.}
-    """
-    def __init__(self):
-        self.queues = defaultdict(deque)  #: name:queue
-
-    def close(self):
-        pass
-
-    def get_queues(self):
-        return self.queues.keys()
-
-    def get_items(self, queue_name):
-        return self.queues[queue_name]
-
-    def push(self, queue_name, item):
-        self.queues[queue_name].append(item)
-
-    def delete_items(self, items):
-        for queue in self.queues.values():
-            for item in items:
-                try:
-                    queue.remove(item)
-                except ValueError:
-                    pass
-
-    def update_items_ttl(self, items):
-        # TTLs are already updated by the caller
-        pass
-
-###########################################################################
-###########################################################################
-
-class SqliteQueuesStorage(QueuesStorage):
-    def __init__(self, filename):
-        self.filename = filename
-        self.conn = sqlite3.connect(self.filename)
-        self.crs = self.conn.cursor()
-        self.test_format()
-        self.sweep()
-
-    ####################################################
-
-    def close(self):
-        if self.crs:
-            self.crs.close()
-            self.crs = None
-        if self.conn:
-            self.conn.close()
-            self.conn = None
-
-    ####################################################
-
-    def test_format(self):
-        """
-        Make sure that the database file content is OK.
-        """
-        self.crs.execute("""SELECT count(1) FROM sqlite_master
-                                  WHERE type='table' AND name='items'""")
-        if self.crs.fetchone()[0] != 1:
-            self.prepare_format()
-
-    ####################################################
-
-    def prepare_format(self):
-        with self.conn:
-            self.crs.execute("""CREATE TABLE items (queue_name TEXT, uuid TEXT,
-                                        data BLOB, ttl REAL, flags INTEGER)""")
-
-    ####################################################
-
-    def sweep(self):
-        with self.conn:
-            self.crs.execute("""VACUUM""")
-
-    ####################################################
-
-    def get_queues(self):
-        self.crs.execute("""SELECT queue_name FROM items GROUP BY queue_name""")
-        return [r[0] for r in self.crs.fetchall()]
-
-    ####################################################
-
-    def get_items(self, queue_name):
-        self.crs.execute("""SELECT uuid, data, ttl, flags FROM items
-                                   WHERE queue_name = ?""",
-                          (queue_name,))
-        items = []
-        for res in self.crs.fetchall():
-            data = res[1]
-            if type(data) != bytes:
-                data = bytes(data)  # XXX python2 hack
-            items.append(Message(uuid=a2b_base64(res[0]),
-                                data=data,
-                                ttl=res[2],
-                                flags=res[3]))
-        return items
-
-    ####################################################
-
-    def push(self, queue_name, item):
-        with self.conn:
-            self.crs.execute("""INSERT INTO items
-                                    (queue_name, uuid, data, ttl, flags)
-                                    VALUES (?, ?, ?, ?, ?)""",
-                          (queue_name, b2a_base64(item.uuid), item.data,
-                          item.ttl, item.flags))
-
-    ####################################################
-
-    def delete_items(self, items):
-        # TODO use SQL operator "IN"
-        with self.conn:
-            for item in items:
-                self.crs.execute("""DELETE FROM items WHERE uuid = ?""",
-                              (b2a_base64(item.uuid),))
-
-    ####################################################
-
-    def update_items_ttl(self, items):
-        with self.conn:
-            for item in items:
-                self.crs.execute("""UPDATE items SET ttl = ? WHERE uuid = ?""",
-                          (item.ttl, b2a_base64(item.uuid)))
-
-###########################################################################
-###########################################################################
 # manager
 ###########################################################################
 
@@ -280,11 +119,13 @@ class QueuesManager(object):
         """
         @param storage: None or persistent storage
         """
-        assert (storage is None) or isinstance(storage, QueuesStorage)
+        assert (storage is None) or isinstance(storage, QueuesStorageBase)
         self.storage = storage
         self.queues = {}  #: name:Queue
+        self.log = logging.getLogger("snakemq.queuesmanager")
         if storage:
             self.load_from_storage()
+            self.log.debug("queues in storage: %i" % len(self.queues))
 
     ####################################################
 
