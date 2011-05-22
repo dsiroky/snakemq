@@ -3,10 +3,12 @@ communication between hosts.
 
 Features
 ========
+  * pure Python
   * cross-platform - tested under Linux and MS Windows
   * symmetrical - single TCP connection for duplex communication
   * asynchronous - poll()
   * automatic reconnect
+  * SSL
   * reliable delivery - configurable message role and delivery timeout
   * persistent/transient queues
   * multiple storage options - SQLite, MongoDB, ...
