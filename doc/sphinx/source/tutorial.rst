@@ -1,4 +1,4 @@
-Examples
+Tutorial
 ========
 
 ----------------------
@@ -46,10 +46,16 @@ Bob wants to send a message to Alice::
 
   # drop after 600 seconds if the message can't be delivered
   message = snakemq.message.Message(b"hello", ttl=600)
-  bob_messaging.send_message("alice", message)
+  my_messaging.send_message("alice", message)
 
 The message is inserted into a queue and it will be delivered as soon as
 possible. The message is also transient so it will be lost if the process quits.
+
+.. note::
+   Sending message to itself (e.g. ``bob_messaging.send_message("bob",
+   message)``) will not work. It will be queued but it will be eventually
+   delivered only to another peer with the same identifier (peers with
+   identical identifier are not desired).
 
 Receiving callback::
 
@@ -65,7 +71,7 @@ If you want the messaging system to persist undelivered messages (messages will
 survive process shutdowns, they will be loaded on start) then use a storage and mark
 messages as persistent::
 
-  from snakemq.queues import SqliteQueuesStorage
+  from snakemq.storage.sqlite import SqliteQueuesStorage
   from snakemq.message import FLAG_PERSISTENT
 
   storage = SqliteQueuesStorage("storage.db")
@@ -73,15 +79,28 @@ messages as persistent::
 
   message = snakemq.message.Message(b"hello", ttl=600, flags=FLAG_PERSISTENT)
 
+-------
+Logging
+-------
+If you want to see what is going on inside::
+
+  import logging
+  import snakemq
+
+  snakemq.init_logging()
+  logger = logging.getLogger("snakemq")
+  logger.setLevel(logging.DEBUG)
+
 -----------
 SSL context
 -----------
 To make the link secure just add SSL configuration::
 
-    sslcfg = snakemq.link.SSLConfig("testkey.pem", "testcert.pem")
+  sslcfg = snakemq.link.SSLConfig("testkey.pem", "testcert.pem")
 
-    # peer A
-    my_link.add_listener(("", 4000), ssl_config=sslcfg)
+  # peer A
+  my_link.add_listener(("", 4000), ssl_config=sslcfg)
 
-    # peer B
-    my_link.add_connector(("localhost", 4000), ssl_config=sslcfg)
+  # peer B
+  my_link.add_connector(("localhost", 4000), ssl_config=sslcfg)
+

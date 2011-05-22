@@ -2,17 +2,17 @@
 """
 Data format
 ===========
-Each packet contains always a single frame: C{[1B type|payload]}.
+Each packet contains always a single frame: ``[1B type|payload]``.
 
 Payload
 -------
-- protokol version: C{[4B version]}.
-- incompatible protocol: C{[]}
-- identification: C{[ident]}
-- message: C{[16B UUID|4B TTL|4B flags|message]}
+- protokol version: ``[4B version]``.
+- incompatible protocol: ``[]``
+- identification: ``[ident]``
+- message: ``[16B UUID|4B TTL|4B flags|message]``
 
-@author: David Siroky (siroky@dasir.cz)
-@license: MIT License (see LICENSE.txt or
+:author: David Siroky (siroky@dasir.cz)
+:license: MIT License (see LICENSE.txt or
           U{http://www.opensource.org/licenses/mit-license.php})
 """
 
@@ -58,8 +58,6 @@ FRAME_FORMAT_MESSAGE_SIZE = struct.calcsize(FRAME_FORMAT_MESSAGE)
 
 MIN_FRAME_SIZE = 1  # just the type field
 
-MESSAGE_FLAG_PERSISTENT = 0x1  #: deliver at all cost (queue to disk as well)
-
 ENCODING = "utf-8"
 
 #############################################################################
@@ -67,6 +65,12 @@ ENCODING = "utf-8"
 
 class Messaging(object):
     def __init__(self, identifier, domain, packeter, queues_storage=None):
+        """
+        :param identifier: peer identifier
+        :param domain: currently unused
+        :param packeter: :class:`~snakemq.packeter.Packeter`
+        :param queues_storage: :class:`~snakemq.storage.QueuesStorageBase`
+        """
         self.identifier = identifier[:MAX_IDENT_LENGTH]
         self.domain = domain
         self.packeter = packeter
@@ -74,10 +78,10 @@ class Messaging(object):
         self.log = logging.getLogger("snakemq.messaging")
 
         #{ callbacks
-        self.on_error = Callback()  #: C{func(conn_id, exception)}
-        self.on_message_recv = Callback()  #: C{func(conn_id, ident, message)}
-        self.on_connect = Callback()  #: C{func(conn_id, ident)}
-        self.on_disconnect = Callback()  #: C{func(conn_id, ident)}
+        self.on_error = Callback()  #: ``func(conn_id, exception)``
+        self.on_message_recv = Callback()  #: ``func(conn_id, ident, message)``
+        self.on_connect = Callback()  #: ``func(conn_id, ident)``
+        self.on_disconnect = Callback()  #: ``func(conn_id, ident)``
         #}
 
         self._ident_by_conn = {}
@@ -236,8 +240,10 @@ class Messaging(object):
 
     def send_message(self, ident, message):
         """
-        @param ident: destination address
-        @param message: L{Message}
+        Thread safe.
+
+        :param ident: destination address
+        :param message: :class:`~snakemq.message.Message`
         """
         assert isinstance(message, Message)
         with self._lock:
@@ -264,8 +270,8 @@ class ReceiveHook(object):
 
     def register(self, regexp, callback):
         """
-        @param regexp:
-        @param callback: L{Messaging.on_message_recv}
+        :param regexp:
+        :param callback: L{Messaging.on_message_recv}
         """
         self._hooks[regexp] = (re.compile(regexp), callback)
 
@@ -283,7 +289,7 @@ class ReceiveHook(object):
 
     def _get_callbacks(self, txt):
         """
-        @return: all callbacks that matches
+        :return: all callbacks that matches
         """
         return [callback for regexp, callback in self._hooks.values()
                                             if regexp.match(txt)]

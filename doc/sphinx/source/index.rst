@@ -5,17 +5,8 @@ Generated on |today|.
 Contents:
 
 .. toctree::
-  :maxdepth: 2
+  :numbered:
 
-  examples.rst
   changelog.rst
-
-
-..
-    Indices and tables
-    ==================
-
-    * :ref:`genindex`
-    * :ref:`modindex`
-    * :ref:`search`
-
+  tutorial.rst
+  api.rst

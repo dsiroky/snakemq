@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Packet format: C{[4B size|payload]}, size is bytes count (unsigned integer in
+Packet format: ``[4B size|payload]``, size is bytes count (unsigned integer in
 network order) of all following packet data.
 
-@author: David Siroky (siroky@dasir.cz)
-@license: MIT License (see LICENSE.txt or
+:author: David Siroky (siroky@dasir.cz)
+:license: MIT License (see LICENSE.txt or
           U{http://www.opensource.org/licenses/mit-license.php})
 """
 
@@ -49,7 +49,7 @@ class ReceiveBuffer(StreamBuffer):
 
     def get_packets(self):
         """
-        @return: list of fully received packets
+        :return: list of fully received packets
         """
         packets = []
         while self.size:
@@ -86,16 +86,19 @@ class ConnectionInfo(object):
 
 class Packeter(object):
     def __init__(self, link):
+        """
+        :param link: :class:`~snakemq.link.Link`
+        """
         self.link = link
         self.log = logging.getLogger("snakemq.packeter")
 
         #{ callbacks
-        self.on_connect = Callback()  #: C{func(conn_id)}
-        self.on_disconnect = Callback()  #: C{func(conn_id)}
-        self.on_packet_recv = Callback()  #: C{func(conn_id, packet)}
-        #: C{func(conn_id, packet_id)}, just a signal when a packet was fully sent
+        self.on_connect = Callback()  #: ``func(conn_id)``
+        self.on_disconnect = Callback()  #: ``func(conn_id)``
+        self.on_packet_recv = Callback()  #: ``func(conn_id, packet)``
+        #: ``func(conn_id, packet_id)``, just a signal when a packet was fully sent
         self.on_packet_sent = Callback()
-        self.on_error = Callback()  #: C{func(conn_id, exception)}
+        self.on_error = Callback()  #: ``func(conn_id, exception)``
         #}
 
         self._connections = {}  # conn_id:ConnectionInfo
@@ -113,7 +116,8 @@ class Packeter(object):
     def send_packet(self, conn_id, buf):
         """
         Queue data to be sent over the link.
-        @return: packet id
+
+        :return: packet id
         """
         assert type(buf) == bytes
         conn = self._connections[conn_id]

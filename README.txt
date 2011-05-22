@@ -8,13 +8,10 @@ Features
   * symmetrical - single TCP connection for duplex communication
   * asynchronous - poll()
   * automatic reconnect
-  * SSL
   * reliable delivery - configurable message role and delivery timeout
   * persistent/transient queues
   * multiple storage options - SQLite, MongoDB, ...
-  * brokerless - similar philosophy like ZeroMQ
-  * layered design
-  * open source - MIT License
+  * brokerless - similar philosophy like `ZeroMQ <http://www.zeromq.org/>`_
   * additional modules - RPC
 
 Homepage

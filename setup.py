@@ -16,7 +16,10 @@ setup(name="snakeMQ",
           "Development Status :: 4 - Beta",
           "Intended Audience :: Developers",
           "License :: OSI Approved :: MIT License",
-          "Topic :: System :: Networking"
+          "Topic :: System :: Networking",
+          "Topic :: Communications",
+          "Programming Language :: Python :: 2",
+          "Programming Language :: Python :: 3"
         ],
       packages=find_packages(),
       tests_require=["nose"],

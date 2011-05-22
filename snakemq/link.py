@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-@author: David Siroky (siroky@dasir.cz)
-@license: MIT License (see LICENSE.txt or
+:author: David Siroky (siroky@dasir.cz)
+:license: MIT License (see LICENSE.txt or
           U{http://www.opensource.org/licenses/mit-license.php})
 """
 
@@ -54,7 +54,7 @@ class SSLConfig(object):
     def __init__(self, keyfile=None, certfile=None, cert_reqs=ssl.CERT_NONE,
                   ssl_version=ssl.PROTOCOL_SSLv23, ca_certs=None):
         """
-        @see: ssl.wrap_socket
+        :see: ssl.wrap_socket
         """
         self.keyfile = keyfile
         self.certfile = certfile
@@ -68,8 +68,8 @@ class SSLConfig(object):
 class Link(object):
     """
     Just a bare wire stream communication. Keeper of opened (TCP) connections.
-    B{Not thread-safe} but you can synchronize with the loop using L{wakeup_poll}
-    and L{on_loop_pass}.
+    **Not thread-safe** but you can synchronize with the loop using
+    :meth:`~.wakeup_poll` and :attr:`~.on_loop_pass`.
     """
 
     def __init__(self):
@@ -79,12 +79,13 @@ class Link(object):
         self.recv_block_size = RECV_BLOCK_SIZE
 
         #{ callbacks
-        self.on_connect = Callback()  #: C{func(conn_id)}
-        self.on_disconnect = Callback()  #: C{func(conn_id)}
-        self.on_recv = Callback()  #: C{func(conn_id, data)}
-        #: C{func(conn_id)}, last send was successful
+        self.on_connect = Callback()  #: ``func(conn_id)``
+        self.on_disconnect = Callback()  #: ``func(conn_id)``
+        #: ``func(conn_id, data)``
+        self.on_recv = Callback()
+        #: ``func(conn_id)``, last send was successful
         self.on_ready_to_send = Callback()
-        #: C{func()}, called after poll is processed
+        #: ``func()``, called after poll is processed
         self.on_loop_pass = Callback()
         #}
 
@@ -155,9 +156,10 @@ class Link(object):
         """
         This will not create an immediate connection. It just adds a connector
         to the pool.
-        @param address: remote address
-        @param reconnect_interval: reconnect interval in seconds
-        @return: connector address (use it for deletion)
+
+        :param address: remote address
+        :param reconnect_interval: reconnect interval in seconds
+        :return: connector address (use it for deletion)
         """
         address = socket.gethostbyname(address[0]), address[1]
         if ssl_config is not None:
@@ -173,6 +175,9 @@ class Link(object):
     ##########################################################
 
     def del_connector(self, address):
+        """
+        Delete connector.
+        """
         sock = self._connectors.pop(address)
         self._socks_waiting_to_connect.discard(sock)
         del self._reconnect_intervals[address]
@@ -190,7 +195,8 @@ class Link(object):
     def add_listener(self, address, ssl_config=None):
         """
         Adds listener to the pool. This method is not blocking. Run only once.
-        @return: listener address (use it for deletion)
+
+        :return: listener address (use it for deletion)
         """
         address = socket.gethostbyname(address[0]), address[1]
         if address in self._listen_socks:
@@ -215,6 +221,9 @@ class Link(object):
     ##########################################################
 
     def del_listener(self, address):
+        """
+        Delete listener.
+        """
         sock = self._listen_socks.pop(address)
         fileno = sock.fileno()
         self._listen_socks_filenos.remove(fileno)
@@ -235,11 +244,13 @@ class Link(object):
 
     def send(self, conn_id, data):
         """
-        WARNING: this operation is non-blocking, data might be lost on a closed
-        connection. Always wait for C{Link.on_ready_to_send} to have
-        confirmation about successful send.
+        .. warning::
+          this operation is non-blocking, data might be lost if you close
+          connection before proper delivery. Always wait for
+          :py:attr:`~.on_ready_to_send` to have confirmation about successful
+          send.
 
-        @return: number of bytes sent
+        :return: number of bytes sent
         """
         try:
             sock = self._sock_by_conn[conn_id]
@@ -268,10 +279,11 @@ class Link(object):
     def loop(self, poll_timeout=POLL_TIMEOUT, count=None, runtime=None):
         """
         Start the communication loop.
-        @param poll_timeout: in seconds, should be less then the minimal
+
+        :param poll_timeout: in seconds, should be less then the minimal
                               reconnect time
-        @param count: count of poll events (not timeouts) or None
-        @param runtime: max time of running loop in seconds (also depends
+        :param count: count of poll events (not timeouts) or None
+        :param runtime: max time of running loop in seconds (also depends
                         on the poll timeout) or None
         """
         self._do_loop = True
@@ -309,7 +321,7 @@ class Link(object):
 
     def new_connection_id(self, sock):
         """
-        Create a virtual connection ID. This ID will be passed to C{on_*}
+        Create a virtual connection ID. This ID will be passed to ``on_*``
         functions. It is a unique identifier for every new connection during
         the instance's existence.
         """
@@ -548,7 +560,7 @@ class Link(object):
 
     def loop_pass(self, poll_timeout):
         """
-        @return: values returned by poll
+        :return: values returned by poll
         """
         fds = []
         try:
