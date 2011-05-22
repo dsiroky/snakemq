@@ -374,7 +374,7 @@ class Link(object):
             self._in_ssl_handshake.remove(sock)
             self.poller.modify(sock, select.EPOLLIN)
             return True
-        except ssl.SSLError, err:
+        except ssl.SSLError as err:
             if err.args[0] == ssl.SSL_ERROR_WANT_READ:
                 self.poller.modify(sock, select.EPOLLIN)
             elif err.args[0] == ssl.SSL_ERROR_WANT_WRITE:

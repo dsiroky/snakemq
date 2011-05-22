@@ -49,14 +49,14 @@ class TestQueue(utils.TestCase):
         """
         queue = self.queues_manager.get_queue("testqueue")
         queue.connect()
-        queue.push(Message(b"data a", "a"))
-        queue.push(Message(b"data b", "b"))
+        queue.push(Message(b"data a", b"a"))
+        queue.push(Message(b"data b", b"b"))
         self.assertEqual(len(queue), 2)
-        self.assertEqual(queue.get().uuid, "a")
-        self.assertEqual(queue.get().uuid, "a") # must be the same
+        self.assertEqual(queue.get().uuid, b"a")
+        self.assertEqual(queue.get().uuid, b"a") # must be the same
         queue.pop()
         self.assertEqual(len(queue), 1)
-        self.assertEqual(queue.get().uuid, "b")
+        self.assertEqual(queue.get().uuid, b"b")
         queue.pop()
         self.assertEqual(len(queue), 0)
         self.assertEqual(queue.get(), None)
@@ -72,11 +72,11 @@ class TestQueue(utils.TestCase):
             time_results = iter([0, 3])
             time_mock.side_effect = lambda: next(time_results)
             queue.disconnect()
-            queue.push(Message(b"data a", "a", ttl=1))
-            queue.push(Message(b"data b", "b", ttl=5))
+            queue.push(Message(b"data a", b"a", ttl=1))
+            queue.push(Message(b"data b", b"b", ttl=5))
             queue.connect()
             self.assertEqual(len(queue), 1)
-            self.assertEqual(queue.get().uuid, "b")
+            self.assertEqual(queue.get().uuid, b"b")
 
     ##################################################################
 
@@ -87,11 +87,11 @@ class TestQueue(utils.TestCase):
         queue = self.queues_manager.get_queue("testqueue")
 
         # disconnected
-        queue.push(Message(b"data a", "a", ttl=0))
+        queue.push(Message(b"data a", b"a", ttl=0))
         self.assertEqual(len(queue), 0)
 
         queue.connect()
-        queue.push(Message(b"data a", "a", ttl=0))
+        queue.push(Message(b"data a", b"a", ttl=0))
         self.assertEqual(len(queue), 1)
 
     ##################################################################
@@ -102,20 +102,20 @@ class TestQueue(utils.TestCase):
         """
         queue = self.queues_manager.get_queue("testqueue")
         queue.connect()
-        queue.push(Message(b"data a", "a", ttl=1, flags=FLAG_PERSISTENT))
-        queue.push(Message(b"data b", "b"))
-        queue.push(Message(b"data c", "c", ttl=1, flags=FLAG_PERSISTENT))
+        queue.push(Message(b"data a", b"a", ttl=1, flags=FLAG_PERSISTENT))
+        queue.push(Message(b"data b", b"b"))
+        queue.push(Message(b"data c", b"c", ttl=1, flags=FLAG_PERSISTENT))
         self.assertEqual(len(queue), 3)
         stored_items = self.queues_manager.storage.get_items("testqueue")
         self.assertEqual(len(stored_items), 2)
-        self.assertEqual(stored_items[0].uuid, "a")
-        self.assertEqual(stored_items[1].uuid, "c")
+        self.assertEqual(stored_items[0].uuid, b"a")
+        self.assertEqual(stored_items[1].uuid, b"c")
 
         # remove "a"
         queue.pop()
         stored_items = self.queues_manager.storage.get_items("testqueue")
         self.assertEqual(len(stored_items), 1)
-        self.assertEqual(stored_items[0].uuid, "c")
+        self.assertEqual(stored_items[0].uuid, b"c")
 
         # remove "b", "c" remains
         queue.pop()
@@ -130,32 +130,32 @@ class TestQueue(utils.TestCase):
         """
         queue1 = self.queues_manager.get_queue("testqueue1")
         queue1.connect()
-        queue1.push(Message(b"data a", "a", ttl=1, flags=FLAG_PERSISTENT))
-        queue1.push(Message(b"data b", "b", ttl=1, flags=FLAG_PERSISTENT))
-        queue1.push(Message(b"data c", "c", ttl=1, flags=FLAG_PERSISTENT))
+        queue1.push(Message(b"data a", b"a", ttl=1, flags=FLAG_PERSISTENT))
+        queue1.push(Message(b"data b", b"b", ttl=1, flags=FLAG_PERSISTENT))
+        queue1.push(Message(b"data c", b"c", ttl=1, flags=FLAG_PERSISTENT))
         queue2 = self.queues_manager.get_queue("testqueue2")
         queue2.connect()
-        queue2.push(Message(b"data d", "d", ttl=1, flags=FLAG_PERSISTENT))
-        queue2.push(Message(b"data e", "e", ttl=1, flags=FLAG_PERSISTENT))
+        queue2.push(Message(b"data d", b"d", ttl=1, flags=FLAG_PERSISTENT))
+        queue2.push(Message(b"data e", b"e", ttl=1, flags=FLAG_PERSISTENT))
 
         self.queue_manager_restart()
 
         self.assertEqual(len(self.queues_manager), 2)
         queue = self.queues_manager.get_queue("testqueue1")
         self.assertEqual(len(queue), 3)
-        self.assertEqual(queue.get().uuid, "a")
+        self.assertEqual(queue.get().uuid, b"a")
         queue = self.queues_manager.get_queue("testqueue2")
         self.assertEqual(len(queue), 2)
-        self.assertEqual(queue.get().uuid, "d")
+        self.assertEqual(queue.get().uuid, b"d")
 
     ##################################################################
 
     def test_persistency_ttl(self):
         queue = self.queues_manager.get_queue("testqueue")
         queue.connect()
-        queue.push(Message(b"data a", "a", ttl=1, flags=FLAG_PERSISTENT))
-        queue.push(Message(b"data b", "b"))
-        queue.push(Message(b"data c", "c", ttl=5, flags=FLAG_PERSISTENT))
+        queue.push(Message(b"data a", b"a", ttl=1, flags=FLAG_PERSISTENT))
+        queue.push(Message(b"data b", b"b"))
+        queue.push(Message(b"data c", b"c", ttl=5, flags=FLAG_PERSISTENT))
         self.assertEqual(len(queue), 3)
 
         self.queue_manager_restart()

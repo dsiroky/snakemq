@@ -28,7 +28,7 @@ class Message(object):
         @param flags: combination of FLAG_*
         """
         assert type(data) == bytes
-        assert uuid is None or (type(uuid) == bytes)
+        assert uuid is None or (type(uuid) == bytes), uuid
         self.data = data
         self.uuid = (uuid or bytes(uuid_module.uuid4().bytes))[:MAX_UUID_LENGTH]
         self.ttl = float(ttl)
