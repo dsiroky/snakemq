@@ -34,6 +34,10 @@ RECV_BLOCK_SIZE = 256 * 1024
 POLL_TIMEOUT = 0.2
 BELL_READ = 1024
 
+SSL_HANDSHAKE_IN_PROGRESS = 0
+SSL_HANDSHAKE_DONE = 1
+SSL_HANDSHAKE_FAILED = 2
+
 ############################################################################
 ############################################################################
 
@@ -385,7 +389,7 @@ class Link(object):
             sock.do_handshake()
             self._in_ssl_handshake.remove(sock)
             self.poller.modify(sock, select.EPOLLIN)
-            return True
+            return SSL_HANDSHAKE_DONE
         except ssl.SSLError as err:
             if err.args[0] == ssl.SSL_ERROR_WANT_READ:
                 self.poller.modify(sock, select.EPOLLIN)
@@ -393,21 +397,24 @@ class Link(object):
                 self.poller.modify(sock, select.EPOLLOUT)
             else:
                 conn_id = self._sock_by_conn.get(sock)
-                self.log.debug("SSL handshake error (conn:%s sock:%r): %r" %
-                                  (conn_id, sock, err))
+                self.log.debug("SSL handshake error (peer:%r): %r" %
+                                  (sock.getpeername(), err))
                 self.handle_close(sock)
-        return False
+                return SSL_HANDSHAKE_FAILED
+        return SSL_HANDSHAKE_IN_PROGRESS
 
     ##########################################################
 
     def handle_connect(self, sock):
+        self._socks_waiting_to_connect.remove(sock)
+
         is_ssl = isinstance(sock, ssl.SSLSocket)
         if is_ssl:
             _create_ssl_context(sock)
             self._in_ssl_handshake.add(sock)
-            self.ssl_handshake(sock)
+            if self.ssl_handshake(sock) == SSL_HANDSHAKE_FAILED:
+                return
 
-        self._socks_waiting_to_connect.remove(sock)
         self.poller.modify(sock, select.EPOLLIN)
 
         conn_id = self.new_connection_id(sock)
@@ -438,9 +445,10 @@ class Link(object):
                                       cert_reqs=ssl_config.cert_reqs,
                                       ca_certs=ssl_config.ca_certs)
             self._in_ssl_handshake.add(newsock)
-            self.ssl_handshake(newsock)
             # replace the plain socket
             self._sock_by_fd[newsock.fileno()] = newsock
+            if self.ssl_handshake(newsock) == SSL_HANDSHAKE_FAILED:
+                return
 
         conn_id = self.new_connection_id(newsock)
         self.log.info("accept %s %r" % (conn_id, address))
@@ -550,7 +558,7 @@ class Link(object):
                 self.handle_sock_err(sock)
             else:
                 if sock in self._in_ssl_handshake:
-                    if self.ssl_handshake(sock):
+                    if self.ssl_handshake(sock) == SSL_HANDSHAKE_DONE:
                         # connection is ready for user IO
                         self.on_connect(self._conn_by_sock[sock])
                 else:
