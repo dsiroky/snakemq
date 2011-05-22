@@ -73,3 +73,15 @@ messages as persistent::
 
   message = snakemq.message.Message(b"hello", ttl=600, flags=FLAG_PERSISTENT)
 
+-----------
+SSL context
+-----------
+To make the link secure just add SSL configuration::
+
+    sslcfg = snakemq.link.SSLConfig("testkey.pem", "testcert.pem")
+
+    # peer A
+    my_link.add_listener(("", 4000), ssl_config=sslcfg)
+
+    # peer B
+    my_link.add_connector(("localhost", 4000), ssl_config=sslcfg)

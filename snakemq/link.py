@@ -5,8 +5,12 @@
           U{http://www.opensource.org/licenses/mit-license.php})
 """
 
+# TODO unify socket and SSLSocket under a single class for easier mapping
+# socket:conn_id and other stuff
+
 import select
 import socket
+import ssl
 import os
 import errno
 import time
@@ -29,6 +33,34 @@ RECONNECT_INTERVAL = 3.0
 RECV_BLOCK_SIZE = 256 * 1024
 POLL_TIMEOUT = 0.2
 BELL_READ = 1024
+
+############################################################################
+############################################################################
+
+def _create_ssl_context(sock):
+    # copied and modified from ssl.SSLSocket.connect
+    sock._sslobj = ssl._ssl.sslwrap(sock._sock, False,
+                                    sock.keyfile, sock.certfile,
+                                    sock.cert_reqs, sock.ssl_version,
+                                    sock.ca_certs)
+
+############################################################################
+############################################################################
+
+class SSLConfig(object):
+    """
+    Container for SSL configuration.
+    """
+    def __init__(self, keyfile=None, certfile=None, cert_reqs=ssl.CERT_NONE,
+                  ssl_version=ssl.PROTOCOL_SSLv23, ca_certs=None):
+        """
+        @see: ssl.wrap_socket
+        """
+        self.keyfile = keyfile
+        self.certfile = certfile
+        self.cert_reqs = cert_reqs
+        self.ssl_version = ssl_version
+        self.ca_certs = ca_certs
 
 ############################################################################
 ############################################################################
@@ -78,6 +110,9 @@ class Link(object):
         self._plannned_connections = []  #: (when, address)
         self._reconnect_intervals = {}  #: address:interval
 
+        self._ssl_config = {}  #: key:config, key is address or socket
+        self._in_ssl_handshake = set()  #: set of SSLSockets
+
     ##########################################################
 
     def __del__(self):
@@ -111,10 +146,12 @@ class Link(object):
         assert len(self._socks_waiting_to_connect) == 0
         assert len(self._plannned_connections) == 0
         assert len(self._reconnect_intervals) == 0
+        assert len(self._ssl_config) == 0
+        assert len(self._in_ssl_handshake) == 0
 
     ##########################################################
 
-    def add_connector(self, address, reconnect_interval=None):
+    def add_connector(self, address, reconnect_interval=None, ssl_config=None):
         """
         This will not create an immediate connection. It just adds a connector
         to the pool.
@@ -123,6 +160,8 @@ class Link(object):
         @return: connector address (use it for deletion)
         """
         address = socket.gethostbyname(address[0]), address[1]
+        if ssl_config is not None:
+            self._ssl_config[address] = ssl_config
         if address in self._connectors:
             raise ValueError("connector '%r' already set", address)
         self._connectors[address] = None  # no socket yet
@@ -137,6 +176,8 @@ class Link(object):
         sock = self._connectors.pop(address)
         self._socks_waiting_to_connect.discard(sock)
         del self._reconnect_intervals[address]
+        if address in self._ssl_config:
+            del self._ssl_config[address]
 
         # filter out address from plan
         self._plannned_connections[:] = \
@@ -146,7 +187,7 @@ class Link(object):
 
     ##########################################################
 
-    def add_listener(self, address):
+    def add_listener(self, address, ssl_config=None):
         """
         Adds listener to the pool. This method is not blocking. Run only once.
         @return: listener address (use it for deletion)
@@ -161,6 +202,8 @@ class Link(object):
         listen_sock.listen(10)
         listen_sock.setblocking(0)
 
+        if ssl_config is not None:
+            self._ssl_config[listen_sock] = ssl_config
         self._sock_by_fd[fileno] = listen_sock
         self._listen_socks[address] = listen_sock
         self._listen_socks_filenos.add(fileno)
@@ -176,6 +219,8 @@ class Link(object):
         fileno = sock.fileno()
         self._listen_socks_filenos.remove(fileno)
         del self._sock_by_fd[fileno]
+        if sock in self._ssl_config:
+            del self._ssl_config[sock]
         sock.close()
 
     ##########################################################
@@ -255,6 +300,11 @@ class Link(object):
         self._do_loop = False
 
     ##########################################################
+
+    def get_socket_by_conn(self, conn):
+        return self._sock_by_conn[conn]
+
+    ##########################################################
     ##########################################################
 
     def new_connection_id(self, sock):
@@ -294,6 +344,15 @@ class Link(object):
         """
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.setblocking(0)
+        ssl_config = self._ssl_config.get(address)
+        if ssl_config:
+            sock = ssl.wrap_socket(sock, server_side=False,
+                                      do_handshake_on_connect=False,
+                                      ssl_version=ssl_config.ssl_version,
+                                      keyfile=ssl_config.keyfile,
+                                      certfile=ssl_config.certfile,
+                                      cert_reqs=ssl_config.cert_reqs,
+                                      ca_certs=ssl_config.ca_certs)
         self.poller.register(sock)
 
         self._sock_by_fd[sock.fileno()] = sock
@@ -309,13 +368,41 @@ class Link(object):
 
     ##########################################################
 
+    def ssl_handshake(self, sock):
+        try:
+            sock.do_handshake()
+            self._in_ssl_handshake.remove(sock)
+            self.poller.modify(sock, select.EPOLLIN)
+            return True
+        except ssl.SSLError, err:
+            if err.args[0] == ssl.SSL_ERROR_WANT_READ:
+                self.poller.modify(sock, select.EPOLLIN)
+            elif err.args[0] == ssl.SSL_ERROR_WANT_WRITE:
+                self.poller.modify(sock, select.EPOLLOUT)
+            else:
+                conn_id = self._sock_by_conn.get(sock)
+                self.log.debug("SSL handshake error (conn:%s sock:%r): %r" %
+                                  (conn_id, sock, err))
+                self.handle_close(sock)
+        return False
+
+    ##########################################################
+
     def handle_connect(self, sock):
+        is_ssl = isinstance(sock, ssl.SSLSocket)
+        if is_ssl:
+            _create_ssl_context(sock)
+            self._in_ssl_handshake.add(sock)
+            self.ssl_handshake(sock)
+
         self._socks_waiting_to_connect.remove(sock)
         self.poller.modify(sock, select.EPOLLIN)
 
         conn_id = self.new_connection_id(sock)
         self.log.info("connect %s %r" % (conn_id, sock.getpeername()))
-        self.on_connect(conn_id)
+        if not is_ssl:
+            # plain socket can communicate immediatelly, SSL after handshake
+            self.on_connect(conn_id)
 
     ##########################################################
 
@@ -329,9 +416,24 @@ class Link(object):
         self._sock_by_fd[newsock.fileno()] = newsock
         self.poller.register(newsock, select.EPOLLIN)
 
+        ssl_config = self._ssl_config.get(sock)
+        if ssl_config:
+            newsock = ssl.wrap_socket(newsock, server_side=True,
+                                      do_handshake_on_connect=False,
+                                      ssl_version=ssl_config.ssl_version,
+                                      keyfile=ssl_config.keyfile,
+                                      certfile=ssl_config.certfile,
+                                      cert_reqs=ssl_config.cert_reqs,
+                                      ca_certs=ssl_config.ca_certs)
+            self._in_ssl_handshake.add(newsock)
+            self.ssl_handshake(newsock)
+            # replace the plain socket
+            self._sock_by_fd[newsock.fileno()] = newsock
+
         conn_id = self.new_connection_id(newsock)
         self.log.info("accept %s %r" % (conn_id, address))
-        self.on_connect(conn_id)
+        if not ssl_config:
+            self.on_connect(conn_id)
 
     ##########################################################
 
@@ -379,7 +481,9 @@ class Link(object):
             conn_id = self._conn_by_sock[sock]
             self.del_connection_id(sock)
             self.log.info("disconnect %s " % conn_id)
-            self.on_disconnect(conn_id)
+            if ((not isinstance(sock, ssl.SSLSocket)) or
+                    (sock not in self._in_ssl_handshake)):
+                self.on_disconnect(conn_id)
 
         if sock in self._socks_addresses:
             address = self._socks_addresses.pop(sock)
@@ -397,6 +501,28 @@ class Link(object):
 
     ##########################################################
 
+    def handle_sock_err(self, sock):
+        if sock in self._socks_waiting_to_connect:
+            self.handle_conn_refused(sock)
+        else:
+            self.handle_close(sock)
+
+    ##########################################################
+
+    def handle_sock_io(self, fd, sock, mask):
+        if mask & select.EPOLLOUT:
+            if sock in self._socks_waiting_to_connect:
+                self.handle_connect(sock)
+            else:
+                self.handle_ready_to_send(sock)
+        if mask & select.EPOLLIN:
+            if fd in self._listen_socks_filenos:
+                self.handle_accept(sock)
+            else:
+                self.handle_recv(sock)
+
+    ##########################################################
+
     def handle_fd_mask(self, fd, mask):
         if fd == self._poll_bell.r:
             assert mask & select.EPOLLIN
@@ -409,21 +535,14 @@ class Link(object):
             sock = self._sock_by_fd[fd]
 
             if mask & (select.EPOLLERR | select.EPOLLHUP):
-                if sock in self._socks_waiting_to_connect:
-                    self.handle_conn_refused(sock)
-                else:
-                    self.handle_close(sock)
+                self.handle_sock_err(sock)
             else:
-                if mask & select.EPOLLOUT:
-                    if sock in self._socks_waiting_to_connect:
-                        self.handle_connect(sock)
-                    else:
-                        self.handle_ready_to_send(sock)
-                if mask & select.EPOLLIN:
-                    if fd in self._listen_socks_filenos:
-                        self.handle_accept(sock)
-                    else:
-                        self.handle_recv(sock)
+                if sock in self._in_ssl_handshake:
+                    if self.ssl_handshake(sock):
+                        # connection is ready for user IO
+                        self.on_connect(self._conn_by_sock[sock])
+                else:
+                    self.handle_sock_io(fd, sock, mask)
 
     ##########################################################
 
