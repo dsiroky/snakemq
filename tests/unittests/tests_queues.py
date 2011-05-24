@@ -20,7 +20,7 @@ try:
     has_mongodb = True
 except ImportError:
     has_mongodb = False
-    warnings.warn("missing MondoDB support", RuntimeWarning)
+    warnings.warn("missing MongoDB support", RuntimeWarning)
 
 import utils
 

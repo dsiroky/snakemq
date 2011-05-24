@@ -42,8 +42,11 @@ SSL_HANDSHAKE_FAILED = 2
 ############################################################################
 
 def _create_ssl_context(sock):
-    # copied and modified from ssl.SSLSocket.connect
-    sock._sslobj = ssl._ssl.sslwrap(sock._sock, False,
+    if hasattr(sock, "_sock"):
+        raw_sock = sock._sock  # py2
+    else:
+        raw_sock = sock  # py3
+    sock._sslobj = ssl._ssl.sslwrap(raw_sock, False,
                                     sock.keyfile, sock.certfile,
                                     sock.cert_reqs, sock.ssl_version,
                                     sock.ca_certs)
@@ -432,7 +435,6 @@ class Link(object):
             self.log.error("accept %r: %r" % (sock, exc))
             return
         newsock.setblocking(0)
-        self.poller.register(newsock, select.EPOLLIN)
 
         ssl_config = self._ssl_config.get(sock)
         if ssl_config:
@@ -443,13 +445,16 @@ class Link(object):
                                       certfile=ssl_config.certfile,
                                       cert_reqs=ssl_config.cert_reqs,
                                       ca_certs=ssl_config.ca_certs)
+            self.poller.register(newsock, select.EPOLLIN)
             self._in_ssl_handshake.add(newsock)
             # replace the plain socket
             self._sock_by_fd[newsock.fileno()] = newsock
             if self.ssl_handshake(newsock) == SSL_HANDSHAKE_FAILED:
                 return
+        else:
+            self.poller.register(newsock, select.EPOLLIN)
+            self._sock_by_fd[newsock.fileno()] = newsock
 
-        self._sock_by_fd[newsock.fileno()] = newsock
         conn_id = self.new_connection_id(newsock)
         self.log.info("accept %s %r" % (conn_id, address))
 

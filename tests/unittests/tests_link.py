@@ -92,13 +92,14 @@ class TestLink(utils.TestCase):
 
     def test_connector_cleanup_connection_refused(self):
         link = snakemq.link.Link()
-        link.handle_conn_refused = utils.FuncCallLogger(link.handle_conn_refused)
-        addr = link.add_connector(("localhost", TEST_PORT))
-        link._connect(addr)
-        link.loop_pass(1.0)
+        link_wrapper = mock.Mock(wraps=link)
+        with mock.patch_object(link, "handle_conn_refused",
+                                link_wrapper.handle_conn_refused):
+            addr = link.add_connector(("localhost", TEST_PORT))
+            link._connect(addr)
+            link.loop_pass(1.0)
         # just make sure that the connection failed
-        # TODO replace with mocker
-        self.assertEqual(len(link.handle_conn_refused.call_log), 1)
+        self.assertEqual(link_wrapper.handle_conn_refused.call_count, 1)
         link.del_connector(addr)
         self.assertEqual(len(link._socks_waiting_to_connect), 0)
         link.cleanup()
