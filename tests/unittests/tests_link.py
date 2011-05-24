@@ -24,13 +24,19 @@ TEST_PORT = 40000
 #############################################################################
 
 class TestLink(utils.TestCase):
-    def run_srv_cli(self, server, client):
+    def create_links(self):
         link_server = snakemq.link.Link()
         link_server.add_listener(("", TEST_PORT))
         link_client = snakemq.link.Link()
         link_client.add_connector(("localhost", TEST_PORT))
+        return link_server, link_client
 
-        thr_server = threading.Thread(target=server, args=[link_server])
+    ########################################################
+
+    def run_srv_cli(self, server, client):
+        link_server, link_client = self.create_links()
+
+        thr_server = threading.Thread(target=server, args=[link_server], name="srv")
         try:
             thr_server.start()
             client(link_client)
@@ -166,3 +172,28 @@ class TestLink(utils.TestCase):
             self.assertEqual(link_wrapper.handle_close.call_count, 1)
 
         self.run_srv_cli(server, client)
+
+#############################################################################
+#############################################################################
+
+class TestLinkSSL(TestLink):
+    def create_links(self):
+        cfg = snakemq.link.SSLConfig("testkey.pem", "testcert.pem")
+        link_server = snakemq.link.Link()
+        link_server.add_listener(("", TEST_PORT), ssl_config=cfg)
+        link_client = snakemq.link.Link()
+        link_client.add_connector(("localhost", TEST_PORT), ssl_config=cfg)
+        return link_server, link_client
+
+#############################################################################
+#############################################################################
+
+class TestLinkSSLFailures(utils.TestCase):
+    def test_handshake(self):
+        pass # TODO
+
+    def test_recv(self):
+        pass # TODO
+
+    def test_send(self):
+        pass # TODO

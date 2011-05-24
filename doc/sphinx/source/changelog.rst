@@ -5,7 +5,7 @@ Changelog
   * MongoDB storage
 
 0.5.3
-  * python3 adaptation
+  * Python3 adaptation
 
 0.5.2
   * all callbacks can be bound to more then 1 callable

@@ -397,7 +397,7 @@ class Link(object):
                 self.poller.modify(sock, select.EPOLLOUT)
             else:
                 conn_id = self._sock_by_conn.get(sock)
-                self.log.debug("SSL handshake error (peer:%r): %r" %
+                self.log.error("SSL handshake (peer:%r): %r" %
                                   (sock.getpeername(), err))
                 self.handle_close(sock)
                 return SSL_HANDSHAKE_FAILED
@@ -415,10 +415,10 @@ class Link(object):
             if self.ssl_handshake(sock) == SSL_HANDSHAKE_FAILED:
                 return
 
-        self.poller.modify(sock, select.EPOLLIN)
-
         conn_id = self.new_connection_id(sock)
         self.log.info("connect %s %r" % (conn_id, sock.getpeername()))
+        self.poller.modify(sock, select.EPOLLIN)
+
         if not is_ssl:
             # plain socket can communicate immediatelly, SSL after handshake
             self.on_connect(conn_id)
@@ -432,7 +432,6 @@ class Link(object):
             self.log.error("accept %r: %r" % (sock, exc))
             return
         newsock.setblocking(0)
-        self._sock_by_fd[newsock.fileno()] = newsock
         self.poller.register(newsock, select.EPOLLIN)
 
         ssl_config = self._ssl_config.get(sock)
@@ -450,8 +449,10 @@ class Link(object):
             if self.ssl_handshake(newsock) == SSL_HANDSHAKE_FAILED:
                 return
 
+        self._sock_by_fd[newsock.fileno()] = newsock
         conn_id = self.new_connection_id(newsock)
         self.log.info("accept %s %r" % (conn_id, address))
+
         if not ssl_config:
             self.on_connect(conn_id)
 
@@ -469,10 +470,11 @@ class Link(object):
             else:
                 self.handle_close(sock)
         except socket.error as exc:
+            # TODO catch SSL exceptions
             err = exc.args[0]
             if err in (errno.ECONNRESET, errno.ENOTCONN, errno.ESHUTDOWN,
                         errno.ECONNABORTED, errno.EPIPE, errno.EBADF):
-                self.log.debug("recv %s error %s" %
+                self.log.error("recv %s error %s" %
                                   (conn_id, errno.errorcode[err]))
                 self.handle_close(sock)
             elif err != errno.EWOULDBLOCK:

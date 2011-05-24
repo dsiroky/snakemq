@@ -1,4 +1,4 @@
-#! -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 @author: David Siroky (siroky@dasir.cz)
 @license: MIT License (see LICENSE.txt or 
