@@ -42,14 +42,19 @@ SSL_HANDSHAKE_FAILED = 2
 ############################################################################
 
 def _create_ssl_context(sock):
-    if hasattr(sock, "_sock"):
-        raw_sock = sock._sock  # py2
+    # XXX why Python's ssl module does not support nonblocking sockets?!?!?
+    if hasattr(sock, "context"):
+        # py3.2
+        sock._sslobj = sock.context._wrap_socket(sock, sock.server_side, None)
     else:
-        raw_sock = sock  # py3
-    sock._sslobj = ssl._ssl.sslwrap(raw_sock, False,
-                                    sock.keyfile, sock.certfile,
-                                    sock.cert_reqs, sock.ssl_version,
-                                    sock.ca_certs)
+        if hasattr(sock, "_sock"):
+            raw_sock = sock._sock  # py2
+        else:
+            raw_sock = sock  # py3.1
+        sock._sslobj = ssl._ssl.sslwrap(raw_sock, False,
+                                        sock.keyfile, sock.certfile,
+                                        sock.cert_reqs, sock.ssl_version,
+                                        sock.ca_certs)
 
 ############################################################################
 ############################################################################
