@@ -128,16 +128,13 @@ class Link(object):
 
     ##########################################################
 
-    def __del__(self):
-        self.cleanup()
-
-    ##########################################################
-
     def cleanup(self):
         """
         Close all sockets and remove all connectors and listeners.
         """
         assert not self._do_loop
+
+        self._poll_bell.close()
 
         for address in list(self._connectors.keys()):
             self.del_connector(address)
@@ -507,6 +504,11 @@ class Link(object):
     def handle_close(self, sock):
         self.poller.unregister(sock)
         del self._sock_by_fd[sock.fileno()]
+        try:
+            sock.shutdown(socket.SHUT_RDWR)
+        except socket.error as exc:
+            if exc.errno != errno.ENOTCONN:
+                raise
         sock.close()
 
         if sock in self._conn_by_sock:

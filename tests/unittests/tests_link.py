@@ -76,7 +76,9 @@ class TestLink(utils.TestCase):
             link.loop(runtime=0.5)
 
         self.run_srv_cli(server, client)
-        self.assertEqual(container["sent"], b"".join(container["received"]))
+        received = b"".join(container["received"])
+        self.assertEqual(container["sent"], received,
+                        (len(container["sent"]), len(received)))
 
     ########################################################
 
@@ -93,7 +95,7 @@ class TestLink(utils.TestCase):
     def test_connector_cleanup_connection_refused(self):
         link = snakemq.link.Link()
         link_wrapper = mock.Mock(wraps=link)
-        with mock.patch_object(link, "handle_conn_refused",
+        with mock.patch.object(link, "handle_conn_refused",
                                 link_wrapper.handle_conn_refused):
             addr = link.add_connector(("localhost", TEST_PORT))
             link._connect(addr)
@@ -167,7 +169,7 @@ class TestLink(utils.TestCase):
 
             # handle_close must be called only 1x
             link_wrapper = mock.Mock(wraps=link)
-            with mock.patch_object(link, "handle_close",
+            with mock.patch.object(link, "handle_close",
                                     link_wrapper.handle_close):
                 link.loop(runtime=0.5)
             self.assertEqual(link_wrapper.handle_close.call_count, 1)

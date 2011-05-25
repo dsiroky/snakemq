@@ -5,5 +5,5 @@
           U{http://www.opensource.org/licenses/mit-license.php})
 """
 
-VERSION = "0.5.4"
+VERSION = "0.5.4-sslfix"
 PROTOCOL_VERSION = 1

@@ -35,6 +35,10 @@ class PosixBell(BellBase):
     def read(self, num):
         return os.read(self.r, num)
 
+    def close(self):
+        os.close(self.r)
+        os.close(self.w)
+
 ############################################################################
 ############################################################################
 
@@ -68,6 +72,10 @@ class WinBell(BellBase):
                 raise new_exc
             else:
                 raise
+
+    def close(self):
+        self.sr.close()
+        self.sw.close()
 
 ############################################################################
 ############################################################################

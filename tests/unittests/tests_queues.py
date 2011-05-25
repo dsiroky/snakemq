@@ -270,7 +270,7 @@ class TestMemoryStorage(BaseTestStorageMixin, utils.TestCase):
 ############################################################################
 
 class TestSqliteStorage(BaseTestStorageMixin, utils.TestCase):
-    STORAGE_FILENAME = "/tmp/snakemq_testqueue.storage"
+    STORAGE_FILENAME = "testqueuestorage.sqlite"
 
     def storage_factory(self):
         self.storage = SqliteQueuesStorage(TestSqliteStorage.STORAGE_FILENAME)

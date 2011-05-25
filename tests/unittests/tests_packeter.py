@@ -110,4 +110,5 @@ class TestPacketer(utils.TestCase):
             link.loop(runtime=0.5)
 
         self.run_srv_cli(server, client)
-        self.assertEqual(to_send, container["received"])
+        self.assertEqual(to_send, container["received"],
+                        (len(to_send), len(container["received"])))
