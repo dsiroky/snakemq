@@ -49,8 +49,8 @@ class TestQueue(utils.TestCase):
         """
         queue = self.queues_manager.get_queue("testqueue")
         queue.connect()
-        queue.push(Message(b"data a", b"a"))
-        queue.push(Message(b"data b", b"b"))
+        queue.push(Message(b"data a", uuid=b"a"))
+        queue.push(Message(b"data b", uuid=b"b"))
         self.assertEqual(len(queue), 2)
         self.assertEqual(queue.get().uuid, b"a")
         self.assertEqual(queue.get().uuid, b"a") # must be the same
@@ -72,11 +72,25 @@ class TestQueue(utils.TestCase):
             time_results = iter([0, 3])
             time_mock.side_effect = lambda: next(time_results)
             queue.disconnect()
-            queue.push(Message(b"data a", b"a", ttl=1))
-            queue.push(Message(b"data b", b"b", ttl=5))
+            queue.push(Message(b"data a", uuid=b"a", ttl=1))
+            queue.push(Message(b"data b", uuid=b"b", ttl=5))
             queue.connect()
             self.assertEqual(len(queue), 1)
-            self.assertEqual(queue.get().uuid, b"b")
+            msg = queue.get()
+            self.assertEqual(msg.uuid, b"b")
+            self.assertEqual(msg.ttl, 2)  # 5 - 3
+
+    ##################################################################
+
+    def test_ttl_none(self):
+        queue = self.queues_manager.get_queue("testqueue")
+        queue.disconnect()
+        queue.push(Message(b"data a", uuid=b"a", ttl=None))
+        queue.connect()
+        self.assertEqual(len(queue), 1)
+        msg = queue.get()
+        self.assertEqual(msg.uuid, b"a")
+        self.assertEqual(msg.ttl, None)
 
     ##################################################################
 
@@ -87,11 +101,11 @@ class TestQueue(utils.TestCase):
         queue = self.queues_manager.get_queue("testqueue")
 
         # disconnected
-        queue.push(Message(b"data a", b"a", ttl=0))
+        queue.push(Message(b"data a", uuid=b"a", ttl=0))
         self.assertEqual(len(queue), 0)
 
         queue.connect()
-        queue.push(Message(b"data a", b"a", ttl=0))
+        queue.push(Message(b"data a", uuid=b"a", ttl=0))
         self.assertEqual(len(queue), 1)
 
     ##################################################################
@@ -102,9 +116,9 @@ class TestQueue(utils.TestCase):
         """
         queue = self.queues_manager.get_queue("testqueue")
         queue.connect()
-        queue.push(Message(b"data a", b"a", ttl=1, flags=FLAG_PERSISTENT))
-        queue.push(Message(b"data b", b"b"))
-        queue.push(Message(b"data c", b"c", ttl=1, flags=FLAG_PERSISTENT))
+        queue.push(Message(b"data a", uuid=b"a", ttl=1, flags=FLAG_PERSISTENT))
+        queue.push(Message(b"data b", uuid=b"b"))
+        queue.push(Message(b"data c", uuid=b"c", ttl=1, flags=FLAG_PERSISTENT))
         self.assertEqual(len(queue), 3)
         stored_items = self.queues_manager.storage.get_items("testqueue")
         self.assertEqual(len(stored_items), 2)
@@ -130,13 +144,13 @@ class TestQueue(utils.TestCase):
         """
         queue1 = self.queues_manager.get_queue("testqueue1")
         queue1.connect()
-        queue1.push(Message(b"data a", b"a", ttl=1, flags=FLAG_PERSISTENT))
-        queue1.push(Message(b"data b", b"b", ttl=1, flags=FLAG_PERSISTENT))
-        queue1.push(Message(b"data c", b"c", ttl=1, flags=FLAG_PERSISTENT))
+        queue1.push(Message(b"data a", uuid=b"a", ttl=1, flags=FLAG_PERSISTENT))
+        queue1.push(Message(b"data b", uuid=b"b", ttl=1, flags=FLAG_PERSISTENT))
+        queue1.push(Message(b"data c", uuid=b"c", ttl=1, flags=FLAG_PERSISTENT))
         queue2 = self.queues_manager.get_queue("testqueue2")
         queue2.connect()
-        queue2.push(Message(b"data d", b"d", ttl=1, flags=FLAG_PERSISTENT))
-        queue2.push(Message(b"data e", b"e", ttl=1, flags=FLAG_PERSISTENT))
+        queue2.push(Message(b"data d", uuid=b"d", ttl=1, flags=FLAG_PERSISTENT))
+        queue2.push(Message(b"data e", uuid=b"e", ttl=1, flags=FLAG_PERSISTENT))
 
         self.queue_manager_restart()
 
@@ -153,9 +167,9 @@ class TestQueue(utils.TestCase):
     def test_persistency_ttl(self):
         queue = self.queues_manager.get_queue("testqueue")
         queue.connect()
-        queue.push(Message(b"data a", b"a", ttl=1, flags=FLAG_PERSISTENT))
-        queue.push(Message(b"data b", b"b"))
-        queue.push(Message(b"data c", b"c", ttl=5, flags=FLAG_PERSISTENT))
+        queue.push(Message(b"data a", uuid=b"a", ttl=1, flags=FLAG_PERSISTENT))
+        queue.push(Message(b"data b", uuid=b"b"))
+        queue.push(Message(b"data c", uuid=b"c", ttl=5, flags=FLAG_PERSISTENT))
         self.assertEqual(len(queue), 3)
 
         self.queue_manager_restart()
@@ -247,6 +261,17 @@ class BaseTestStorageMixin(object):
         self.assertEqual(old_msg.ttl, cur_msg.ttl)
         self.assertEqual(old_msg.uuid, cur_msg.uuid)
         self.assertEqual(old_msg.flags, cur_msg.flags)
+
+    ####################################################
+
+    def test_message_ttl_none(self):
+        old_msg = Message(b"a", ttl=None)
+        self.storage.push("q1", old_msg)
+        self.storage.close()
+
+        self.storage_factory()
+        cur_msg = self.storage.get_items("q1")[0]
+        self.assertEqual(cur_msg.ttl, None)
 
 ############################################################################
 ############################################################################

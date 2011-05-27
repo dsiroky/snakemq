@@ -20,21 +20,21 @@ MAX_UUID_LENGTH = 16
 ###########################################################################
 
 class Message(object):
-    def __init__(self, data, uuid=None, ttl=0, flags=0):
+    def __init__(self, data, ttl=0, flags=0, uuid=None):
         """
         :param data: (bytes) payload, **must be immutable** (or deepcopied)
-        :param uuid: (bytes) unique message identifier (implicitly generated)
-        :param ttl: messaging TTL in seconds (integer or float)
+        :param ttl: messaging TTL in seconds (integer or float), None is infinity
         :param flags: combination of FLAG_*
+        :param uuid: (bytes) unique message identifier (implicitly generated)
         """
         assert type(data) == bytes
         assert uuid is None or (type(uuid) == bytes), uuid
         self.data = data
-        self.uuid = (uuid or bytes(uuid_module.uuid4().bytes))[:MAX_UUID_LENGTH]
-        self.ttl = float(ttl)
+        self.ttl = None if ttl is None else float(ttl)
         self.flags = flags
+        self.uuid = (uuid or bytes(uuid_module.uuid4().bytes))[:MAX_UUID_LENGTH]
 
     def __repr__(self):
-        return "<%s id=%X uuid=%r ttl=%f len=%i>" % (
+        return "<%s id=%X uuid=%r ttl=%r len=%i>" % (
             self.__class__.__name__, id(self), self.uuid,
             self.ttl, len(self.data))

@@ -46,6 +46,9 @@ class Queue(object):
         storage_update_ttls = []
         storage_to_delete = []
         for item in self.queue:
+            if item.ttl is None:
+                fresh_queue.append(item)
+                continue
             item.ttl -= diff
             if item.ttl >= 0:  # must include 0
                 fresh_queue.append(item)
@@ -68,13 +71,13 @@ class Queue(object):
     ####################################################
 
     def push(self, item):
-        if (item.ttl <= 0) and not self.connected:
+        if (item.ttl is not None) and (item.ttl <= 0) and not self.connected:
             # do not queue already obsolete items
             return
         self.queue.append(item)
-        if ((item.flags & FLAG_PERSISTENT) and (item.ttl > 0) and
-                self.manager.storage):
-            # no need to store items with no TTL
+        to_store = (item.flags & FLAG_PERSISTENT) and self.manager.storage
+        if to_store and ((item.ttl is None) or (item.ttl > 0)):
+            # do not store items with ttl==0
             self.manager.storage.push(self.name, item)
 
     ####################################################
