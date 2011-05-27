@@ -1,0 +1,11 @@
+{% extends '!layout.html' %}
+
+{%- block footer %}
+  <div class="footer">
+    {%- if show_copyright %}
+        {% trans copyright=copyright|e %}&copy; Copyright {{ copyright }}.{% endtrans %}
+    {%- endif %}
+    <br/>
+    <a href="http://www.snakemq.net/" title="snakeMQ - message queuing for Python">www.snakemq.net</a>
+  </div>
+{%- endblock %}

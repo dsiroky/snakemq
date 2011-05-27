@@ -22,7 +22,7 @@ class A(object):
     def mysignal(self):
         print("mysignal")
 
-snakemq.init_logging()
+snakemq.init()
 logger = logging.getLogger("snakemq")
 logger.setLevel(logging.DEBUG)
 

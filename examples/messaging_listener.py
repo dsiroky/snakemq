@@ -15,7 +15,7 @@ import snakemq.message
 def on_recv(conn, ident, message):
     print("received from", conn, ident, message)
 
-snakemq.init_logging()
+snakemq.init()
 logger = logging.getLogger("snakemq")
 logger.setLevel(logging.DEBUG)
 
