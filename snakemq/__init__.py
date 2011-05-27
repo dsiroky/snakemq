@@ -10,6 +10,7 @@ import logging
 ############################################################################
 ############################################################################
 
+# TODO create generic init() which must be called always
 def init_logging():
     """
     Initialize logging
