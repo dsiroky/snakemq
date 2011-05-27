@@ -22,7 +22,7 @@ MAX_UUID_LENGTH = 16
 class Message(object):
     def __init__(self, data, ttl=0, flags=0, uuid=None):
         """
-        :param data: (bytes) payload, **must be immutable** (or deepcopied)
+        :param data: (bytes) payload
         :param ttl: messaging TTL in seconds (integer or float), None is infinity
         :param flags: combination of FLAG_*
         :param uuid: (bytes) unique message identifier (implicitly generated)
