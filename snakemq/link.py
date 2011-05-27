@@ -390,22 +390,32 @@ class Link(object):
     ##########################################################
 
     def ssl_handshake(self, sock):
+        failed = False
+        err = None
+
         try:
             sock.do_handshake()
-            self._in_ssl_handshake.remove(sock)
-            self.poller.modify(sock, select.EPOLLIN)
-            return SSL_HANDSHAKE_DONE
         except ssl.SSLError as err:
             if err.args[0] == ssl.SSL_ERROR_WANT_READ:
                 self.poller.modify(sock, select.EPOLLIN)
             elif err.args[0] == ssl.SSL_ERROR_WANT_WRITE:
                 self.poller.modify(sock, select.EPOLLOUT)
             else:
-                conn_id = self._sock_by_conn.get(sock)
-                self.log.error("SSL handshake (peer:%r): %r" %
-                                  (sock.getpeername(), err))
-                self.handle_close(sock)
-                return SSL_HANDSHAKE_FAILED
+                failed = True
+        except socket.error as err:
+            failed = True
+        else:
+            self._in_ssl_handshake.remove(sock)
+            self.poller.modify(sock, select.EPOLLIN)
+            self.log.debug("SSL handshake done, fd=%i, cipher=%r" %
+                            (sock.fileno(), sock.cipher()))
+            return SSL_HANDSHAKE_DONE
+        
+        if failed:
+            self.log.error("SSL handshake fd=%i: %r" % (sock.fileno(), err))
+            self.handle_close(sock)
+            return SSL_HANDSHAKE_FAILED
+
         return SSL_HANDSHAKE_IN_PROGRESS
 
     ##########################################################
@@ -414,18 +424,19 @@ class Link(object):
         self._socks_waiting_to_connect.remove(sock)
 
         is_ssl = isinstance(sock, ssl.SSLSocket)
+        handshake_res = SSL_HANDSHAKE_IN_PROGRESS
         if is_ssl:
             _create_ssl_context(sock)
             self._in_ssl_handshake.add(sock)
-            if self.ssl_handshake(sock) == SSL_HANDSHAKE_FAILED:
+            handshake_res = self.ssl_handshake(sock)
+            if handshake_res == SSL_HANDSHAKE_FAILED:
                 return
 
         conn_id = self.new_connection_id(sock)
         self.log.info("connect %s %r" % (conn_id, sock.getpeername()))
         self.poller.modify(sock, select.EPOLLIN)
 
-        if not is_ssl:
-            # plain socket can communicate immediatelly, SSL after handshake
+        if not is_ssl or (handshake_res == SSL_HANDSHAKE_DONE):
             self.on_connect(conn_id)
 
     ##########################################################
@@ -439,6 +450,7 @@ class Link(object):
         newsock.setblocking(0)
 
         ssl_config = self._ssl_config.get(sock)
+        handshake_res = SSL_HANDSHAKE_IN_PROGRESS
         if ssl_config:
             newsock = ssl.wrap_socket(newsock, server_side=True,
                                       do_handshake_on_connect=False,
@@ -451,7 +463,8 @@ class Link(object):
             self._in_ssl_handshake.add(newsock)
             # replace the plain socket
             self._sock_by_fd[newsock.fileno()] = newsock
-            if self.ssl_handshake(newsock) == SSL_HANDSHAKE_FAILED:
+            handshake_res = self.ssl_handshake(newsock)
+            if handshake_res == SSL_HANDSHAKE_FAILED:
                 return
         else:
             self.poller.register(newsock, select.EPOLLIN)
@@ -460,7 +473,7 @@ class Link(object):
         conn_id = self.new_connection_id(newsock)
         self.log.info("accept %s %r" % (conn_id, address))
 
-        if not ssl_config:
+        if not ssl_config or (handshake_res == SSL_HANDSHAKE_DONE):
             self.on_connect(conn_id)
 
     ##########################################################

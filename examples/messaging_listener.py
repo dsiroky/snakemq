@@ -19,8 +19,10 @@ snakemq.init_logging()
 logger = logging.getLogger("snakemq")
 logger.setLevel(logging.DEBUG)
 
+ssl_cfg = snakemq.link.SSLConfig("../tests/unittests/testkey.pem",
+                                "../tests/unittests/testcert.pem")
 s = snakemq.link.Link()
-s.add_listener(("", 4000))
+s.add_listener(("", 4000), ssl_config=ssl_cfg)
 
 pktr = snakemq.packeter.Packeter(s)
 
