@@ -42,7 +42,7 @@ class Epoll(object):
         wlist = []
         xlist = []
         for fd, mask in self.fds.items():
-            if isinstance(fd, socket.socket):
+            if not isinstance(fd, int):
                 fd = fd.fileno()
             if mask & select.EPOLLIN:
                 rlist.append(fd)
