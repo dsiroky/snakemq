@@ -339,14 +339,18 @@ class Link(object):
 
     def send(self, conn_id, data):
         """
-        Do not feed this method with large bulks of data in MS Windows. It
-        sometimes blocks even in non-blocking mode.
+        After calling `send` wait for :py:attr:`~.on_ready_to_send` before
+        sending next data.
 
-        .. warning::
-          this operation is non-blocking, data might be lost if you close
-          connection before proper delivery. Always wait for
-          :py:attr:`~.on_ready_to_send` to have confirmation about successful
-          send.
+        This operation is non-blocking, data might be lost if you close
+        connection before proper delivery. Always wait for
+        :py:attr:`~.on_ready_to_send` to have confirmation about successful
+        send.
+
+        Do not feed this method with large bulks of data in MS Windows. It
+        sometimes blocks for a little time even in non-blocking mode.
+
+        Optimal data size is 16k-64k.
 
         :return: number of bytes sent
         """
