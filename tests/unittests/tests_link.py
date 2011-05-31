@@ -71,7 +71,7 @@ class TestLink(utils.TestCase):
 
         def client(link):
             def on_connect(conn_id):
-                data = b"abcd" * 1000000 # something "big enough"
+                data = b"abcd" * 500000 # something "big enough" to be split
                 size = link.send(conn_id, data)
                 container["sent"] = data[:size]
                 link.close(conn_id)
@@ -99,16 +99,22 @@ class TestLink(utils.TestCase):
 
     def test_connector_cleanup_connection_refused(self):
         link = snakemq.link.Link()
-        link_wrapper = mock.Mock(wraps=link)
+        addr = link.add_connector(("localhost", TEST_PORT))
+        link_w = mock.Mock(wraps=link)
         with mock.patch.object(link, "handle_conn_refused",
-                                link_wrapper.handle_conn_refused):
-            addr = link.add_connector(("localhost", TEST_PORT))
-            link._connect(addr)
-            link.loop_pass(1.0)
+                                link_w.handle_conn_refused):
+            with mock.patch.object(link, "_connect",
+                                link_w._connect):
+                if not link._connect(addr):
+                    # if the refusal did not happen in_connect then it must
+                    # happen in the next poll round
+                    # MS Windows has long poll/select reaction (aroung 1s)
+                    link.poll(2)
         # just make sure that the connection failed
-        self.assertEqual(link_wrapper.handle_conn_refused.call_count, 1)
-        link.del_connector(addr)
+        self.assertEqual(link_w._connect.call_count, 1)
+        self.assertEqual(link_w.handle_conn_refused.call_count, 1)
         self.assertEqual(len(link._socks_waiting_to_connect), 0)
+        link.del_connector(addr)
         link.cleanup()
 
     ########################################################
@@ -130,10 +136,10 @@ class TestLink(utils.TestCase):
         bell_rd = link._poll_bell.r
         
         # no event, no descriptor returned by poll
-        self.assertEqual(len(link.loop_pass(0)), 0)
+        self.assertEqual(len(link.poll(0)), 0)
         
         link.wakeup_poll()
-        fds = link.loop_pass(1.0)
+        fds = link.poll(1.0)
         self.assertEqual(len(fds), 1)
         self.assertEqual(fds[0][0], bell_rd)
 

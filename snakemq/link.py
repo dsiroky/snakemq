@@ -170,6 +170,12 @@ class LinkSocket(object):
                                         self.sock.cert_reqs, self.sock.ssl_version,
                                         self.sock.ca_certs)
 
+    #########################################################
+
+    def __repr__(self):
+        return "<%s 0x%x fileno=%r>" % (self.__class__.__name__, id(self),
+                                      self.fileno())
+
 ############################################################################
 ############################################################################
 
@@ -333,6 +339,9 @@ class Link(object):
 
     def send(self, conn_id, data):
         """
+        Do not feed this method with large bulks of data in MS Windows. It
+        sometimes blocks even in non-blocking mode.
+
         .. warning::
           this operation is non-blocking, data might be lost if you close
           connection before proper delivery. Always wait for
@@ -385,10 +394,11 @@ class Link(object):
                 (count is not 0) and
                 not ((runtime is not None) and
                       (time.time() - time_start > runtime))):
-            is_event = len(self.loop_pass(poll_timeout))
+            is_event = len(self.poll(poll_timeout))
             self.on_loop_pass()
             if is_event and (count is not None):
                 count -= 1
+            self.deal_connects()
 
         self._do_loop = False
 
@@ -446,6 +456,7 @@ class Link(object):
     def _connect(self, address):
         """
         Try to make an actual connection.
+        :return: True if connected
         """
         sock = self._connectors[address]
         err = sock.connect()
@@ -456,10 +467,13 @@ class Link(object):
 
         if err in (0, errno.EISCONN):
             self.handle_connect(sock)
+            return True
         elif err == (errno.ECONNREFUSED):
             self.handle_conn_refused(sock)
         elif err not in (errno.EINPROGRESS, errno.EWOULDBLOCK):
             raise socket.error(err, errno.errorcode[err])
+
+        return False
 
     ##########################################################
 
@@ -648,7 +662,7 @@ class Link(object):
 
     ##########################################################
 
-    def loop_pass(self, poll_timeout):
+    def poll(self, poll_timeout):
         """
         :return: values returned by poll
         """
@@ -661,7 +675,6 @@ class Link(object):
 
         for fd, mask in fds:
             self.handle_fd_mask(fd, mask)
-        self.deal_connects()
         return fds
 
     ##########################################################
