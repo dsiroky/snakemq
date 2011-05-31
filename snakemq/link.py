@@ -38,10 +38,12 @@ SSL_HANDSHAKE_FAILED = 2
 ############################################################################
 ############################################################################
 
+# TODO move and unify to exceptions.py
+
 class LinkError(Exception):
     pass
 
-class SetupError(Exception):
+class SetupError(LinkError):
     pass
 
 ############################################################################
@@ -86,7 +88,6 @@ class LinkSocket(object):
     #########################################################
 
     def listen(self, address):
-        assert not self.is_connector
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.bind(address)
         self.sock.listen(10)
@@ -95,6 +96,7 @@ class LinkSocket(object):
 
     def accept(self):
         newsock, addr = self.sock.accept()
+        newsock.setblocking(False)
         if self.ssl_config:
             newsock = ssl.wrap_socket(newsock, server_side=True,
                                       do_handshake_on_connect=False,
@@ -146,16 +148,18 @@ class LinkSocket(object):
                 raise
         self.sock.close()
         if self.is_connector:
+            # closed socket cannot be reconnected so a new one must be created
             self.sock = self.create_socket()
 
     #########################################################
 
     def create_ssl_context(self):
-        sock = self.sock
-        if hasattr(sock, "context"):
+        assert isinstance(self.sock, ssl.SSLSocket)
+        # this is always called from handle_connect so server_side=False
+        if hasattr(self.sock, "context"):
             # py3.2
             self.sock._sslobj = self.sock.context._wrap_socket(self.sock,
-                                                  self.sock.server_side, None)
+                                                  False, None)
         else:
             if hasattr(self.sock, "_sock"):
                 raw_sock = self.sock._sock  # py2
@@ -233,6 +237,7 @@ class Link(object):
             self.handle_close(sock)
 
         assert not self._do_loop
+
         # be sure that no memory is wasted
         assert len(self._sock_by_fd) == 0
         assert len(self._sock_by_conn) == 0
@@ -443,14 +448,16 @@ class Link(object):
         Try to make an actual connection.
         """
         sock = self._connectors[address]
-        self.poller.register(sock)
+        err = sock.connect()
 
+        self.poller.register(sock)
         self._sock_by_fd[sock.fileno()] = sock
         self._socks_waiting_to_connect.add(sock)
 
-        err = sock.connect()
         if err in (0, errno.EISCONN):
             self.handle_connect(sock)
+        elif err == (errno.ECONNREFUSED):
+            self.handle_conn_refused(sock)
         elif err not in (errno.EINPROGRESS, errno.EWOULDBLOCK):
             raise socket.error(err, errno.errorcode[err])
 
@@ -519,18 +526,15 @@ class Link(object):
         conn_id = self.new_connection_id(newsock)
         self.log.info("accept %s %r" % (conn_id, address))
 
+        self._sock_by_fd[newsock.fileno()] = newsock
+        self.poller.register(newsock, select.EPOLLIN)
+
         handshake_res = SSL_HANDSHAKE_IN_PROGRESS
         if newsock.ssl_config:
-            self.poller.register(newsock, select.EPOLLIN)
             self._in_ssl_handshake.add(newsock)
-            # replace the plain socket
-            self._sock_by_fd[newsock.fileno()] = newsock
             handshake_res = self.ssl_handshake(newsock)
             if handshake_res == SSL_HANDSHAKE_FAILED:
                 return
-        else:
-            self.poller.register(newsock, select.EPOLLIN)
-            self._sock_by_fd[newsock.fileno()] = newsock
 
         if (newsock.ssl_config is None) or (handshake_res == SSL_HANDSHAKE_DONE):
             self.on_connect(conn_id)

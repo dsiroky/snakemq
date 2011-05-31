@@ -34,11 +34,11 @@ class TestPacketer(utils.TestCase):
 
         thr_server = threading.Thread(target=server, args=[link_server,
                                                           packeter_server])
+        thr_server.start()
         try:
-            thr_server.start()
             client(link_client, packeter_client)
-            thr_server.join()
         finally:
+            thr_server.join()
             link_server.cleanup()
             link_client.cleanup()
 

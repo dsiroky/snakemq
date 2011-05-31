@@ -10,6 +10,7 @@ import errno
 import threading
 
 import mock
+from nose.tools import timed
 
 import snakemq.link
 
@@ -19,6 +20,9 @@ import utils
 #############################################################################
 
 TEST_PORT = 40000
+
+LOOP_RUNTIME = 0.5
+LOOP_RUNTIME_ASSERT = 0.3
 
 #############################################################################
 #############################################################################
@@ -37,16 +41,17 @@ class TestLink(utils.TestCase):
         link_server, link_client = self.create_links()
 
         thr_server = threading.Thread(target=server, args=[link_server], name="srv")
+        thr_server.start()
         try:
-            thr_server.start()
             client(link_client)
-            thr_server.join()
         finally:
+            thr_server.join()
             link_server.cleanup()
             link_client.cleanup()
 
     ########################################################
 
+    @timed(LOOP_RUNTIME_ASSERT)
     def test_large_single_send(self):
         """
         Try a single raw send with large data and compare actually sent data
@@ -62,7 +67,7 @@ class TestLink(utils.TestCase):
 
             link.on_recv = on_recv
             link.on_disconnect = on_disconnect
-            link.loop(runtime=0.5)
+            link.loop(runtime=LOOP_RUNTIME)
 
         def client(link):
             def on_connect(conn_id):
@@ -73,7 +78,7 @@ class TestLink(utils.TestCase):
                 link.stop()
 
             link.on_connect = on_connect
-            link.loop(runtime=0.5)
+            link.loop(runtime=LOOP_RUNTIME)
 
         self.run_srv_cli(server, client)
         received = b"".join(container["received"])
@@ -142,6 +147,7 @@ class TestLink(utils.TestCase):
 
     ########################################################
 
+    @timed(LOOP_RUNTIME_ASSERT)
     def test_close_in_recv(self):
         """
         Calling link.close() in on_recv() must not cause any troubles.
@@ -155,7 +161,7 @@ class TestLink(utils.TestCase):
 
             link.on_connect = on_connect
             link.on_disconnect = on_disconnect
-            link.loop(runtime=0.5)
+            link.loop(runtime=LOOP_RUNTIME)
 
         def client(link):
             def on_recv(conn_id, packet):
@@ -171,7 +177,7 @@ class TestLink(utils.TestCase):
             link_wrapper = mock.Mock(wraps=link)
             with mock.patch.object(link, "handle_close",
                                     link_wrapper.handle_close):
-                link.loop(runtime=0.5)
+                link.loop(runtime=LOOP_RUNTIME)
             self.assertEqual(link_wrapper.handle_close.call_count, 1)
 
         self.run_srv_cli(server, client)
