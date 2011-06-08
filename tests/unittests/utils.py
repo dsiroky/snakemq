@@ -11,4 +11,5 @@ import unittest
 ##########################################################################
 
 class TestCase(unittest.TestCase):
-    pass
+    def shortDescription(self):
+        return str(self)

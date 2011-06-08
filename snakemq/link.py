@@ -38,17 +38,6 @@ SSL_HANDSHAKE_FAILED = 2
 ############################################################################
 ############################################################################
 
-# TODO move and unify to exceptions.py
-
-class LinkError(Exception):
-    pass
-
-class SetupError(LinkError):
-    pass
-
-############################################################################
-############################################################################
-
 class SSLConfig(object):
     """
     Container for SSL configuration.
@@ -268,7 +257,7 @@ class Link(object):
         """
         address = socket.gethostbyname(address[0]), address[1]
         if address in self._connectors:
-            raise SetupError("connector '%r' already set", address)
+            raise ValueError("connector '%r' already set", address)
         sock = LinkSocket(remote_peer=address, ssl_config=ssl_config)
         self._connectors[address] = sock
         self._reconnect_intervals[address] = \
@@ -302,7 +291,7 @@ class Link(object):
         """
         address = socket.gethostbyname(address[0]), address[1]
         if address in self._listen_socks:
-            raise SetupError("listener '%r' already set" % address)
+            raise ValueError("listener '%r' already set" % address)
         listen_sock = LinkSocket(ssl_config=ssl_config)
         listen_sock.listen(address)
 
