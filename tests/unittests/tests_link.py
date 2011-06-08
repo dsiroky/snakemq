@@ -21,8 +21,8 @@ import utils
 
 TEST_PORT = 40000
 
-LOOP_RUNTIME = 0.5
-LOOP_RUNTIME_ASSERT = 0.3
+LOOP_RUNTIME = 1.5
+LOOP_RUNTIME_ASSERT = 1.2  # SSL needs more time, this should be fine
 
 #############################################################################
 #############################################################################
@@ -58,6 +58,7 @@ class TestLink(utils.TestCase):
         with received data.
         """
         container = {"sent": None, "received": []}
+        data_to_send = b"abcd" * 200000 # something "big enough" to be split
 
         def server(link):
             def on_recv(conn_id, data):
@@ -71,13 +72,14 @@ class TestLink(utils.TestCase):
 
         def client(link):
             def on_connect(conn_id):
-                data = b"abcd" * 500000 # something "big enough" to be split
-                size = link.send(conn_id, data)
-                container["sent"] = data[:size]
+                link.send(conn_id, data_to_send)
+            def on_ready_to_send(conn_id, last_send_size):
+                container["sent"] = data_to_send[:last_send_size]
                 link.close(conn_id)
                 link.stop()
 
             link.on_connect = on_connect
+            link.on_ready_to_send = on_ready_to_send
             link.loop(runtime=LOOP_RUNTIME)
 
         self.run_srv_cli(server, client)
@@ -141,6 +143,7 @@ class TestLink(utils.TestCase):
         link.wakeup_poll()
         fds = link.poll(1.0)
         self.assertEqual(len(fds), 1)
+        print (repr(fds))
         self.assertEqual(fds[0][0], bell_rd)
 
         # make sure that the pipe is flushed after wakeup

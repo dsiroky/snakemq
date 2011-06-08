@@ -14,6 +14,8 @@ import time
 import bisect
 import logging
 
+from snakemq.exceptions import SendNotFinished
+
 if os.name == "nt":
     from snakemq.winpoll import Epoll
     epoll = Epoll
@@ -65,6 +67,14 @@ class LinkSocket(object):
 
         self.is_connector = False  #: connector or listener
         self.conn_id = None
+        self.reset()
+
+    #########################################################
+
+    def reset(self):
+        self.write_buf = None  #: for SSL
+        self.last_send_size = 0
+        self.send_finished = True
 
     #########################################################
 
@@ -115,7 +125,26 @@ class LinkSocket(object):
     #########################################################
 
     def send(self, data):
-        return self.sock.send(data)
+        """
+        If data is ``None`` then ``self.write_buf`` is used.
+        """
+        if (data is not None) and not self.send_finished:
+            raise SendNotFinished(("previous send on %r is not finished, " +
+                              "wait for on_ready_to_send") % self)
+
+        data = data or self.write_buf
+
+        self.send_finished = False
+        if self.ssl_config is None:
+            self.last_send_size = self.sock.send(data)
+        else:
+            try:
+                self.last_send_size = self.sock.write(data)
+                self.write_buf = None
+            except ssl.SSLError as exc:
+                if exc.args[0] != ssl.SSL_ERROR_WANT_WRITE:
+                    raise
+                self.write_buf = data
 
     #########################################################
 
@@ -137,6 +166,7 @@ class LinkSocket(object):
                 raise
         self.sock.close()
         if self.is_connector:
+            self.reset()
             # closed socket cannot be reconnected so a new one must be created
             self.sock = self.create_socket()
 
@@ -162,8 +192,8 @@ class LinkSocket(object):
     #########################################################
 
     def __repr__(self):
-        return "<%s 0x%x fileno=%r>" % (self.__class__.__name__, id(self),
-                                      self.fileno())
+        return "<%s 0x%x fileno=%r conn_id=%r>" % (self.__class__.__name__, id(self),
+                                      self.fileno(), self.conn_id)
 
 ############################################################################
 ############################################################################
@@ -186,7 +216,7 @@ class Link(object):
         self.on_disconnect = Callback()  #: ``func(conn_id)``
         #: ``func(conn_id, data)``
         self.on_recv = Callback()
-        #: ``func(conn_id)``, last send was successful
+        #: ``func(conn_id, last_send_size)``, last send was successful
         self.on_ready_to_send = Callback()
         #: ``func()``, called after poll is processed
         self.on_loop_pass = Callback()
@@ -334,31 +364,26 @@ class Link(object):
         This operation is non-blocking, data might be lost if you close
         connection before proper delivery. Always wait for
         :py:attr:`~.on_ready_to_send` to have confirmation about successful
-        send.
+        send and information about amount of sent data.
 
         Do not feed this method with large bulks of data in MS Windows. It
         sometimes blocks for a little time even in non-blocking mode.
 
         Optimal data size is 16k-64k.
-
-        :return: number of bytes sent
         """
         try:
             sock = self._sock_by_conn[conn_id]
-            sent_length = sock.send(data)
+            sock.send(data)
             self.poller.modify(sock, select.EPOLLIN | select.EPOLLOUT)
         except socket.error as exc:
             err = exc.args[0]
             if err == errno.EWOULDBLOCK:
-                return 0
+                pass # ignore it, make caller to wait for "ready to send"
             elif err in (errno.ECONNRESET, errno.ENOTCONN, errno.ESHUTDOWN,
                         errno.ECONNABORTED, errno.EPIPE, errno.EBADF):
                 self.handle_close(sock)
-                return 0
             else:
                 raise
-
-        return sent_length
 
     ##########################################################
 
@@ -604,9 +629,15 @@ class Link(object):
     ##########################################################
 
     def handle_ready_to_send(self, sock):
-        self.poller.modify(sock, select.EPOLLIN)
-        self.log.debug("ready to send " + sock.conn_id)
-        self.on_ready_to_send(sock.conn_id)
+        if sock.write_buf is None:
+            sock.send_finished = True
+            self.poller.modify(sock, select.EPOLLIN)
+            self.log.debug("ready to send %s (last send len=%i)" % 
+                            (sock.conn_id, sock.last_send_size))
+            self.on_ready_to_send(sock.conn_id, sock.last_send_size)
+        else:
+            self.log.debug("ready to send %s, repeat" % sock.conn_id)
+            sock.send(None)  # repeat last buffer
 
     ##########################################################
 
@@ -661,7 +692,7 @@ class Link(object):
         """
         fds = []
         try:
-            fds = self.poller.poll(poll_timeout)
+            fds[:] = self.poller.poll(poll_timeout)
         except IOError as exc:
             if exc.errno != errno.EINTR:  # hibernate does that
                 raise

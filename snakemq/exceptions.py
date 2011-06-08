@@ -8,6 +8,14 @@
 class SnakeMQException(Exception):
     pass
 
+###################################################################
+# link
+class SendNotFinished(SnakeMQException):
+    pass
+
+###################################################################
+# messaging
+
 class SnakeMQBrokenFormat(SnakeMQException):
     pass
 

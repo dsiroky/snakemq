@@ -80,6 +80,7 @@ class ConnectionInfo(object):
     def __init__(self):
         self.send_buffer = StreamBuffer()
         self.recv_buffer = ReceiveBuffer()
+        self.send_in_progress = False
 
 ############################################################################
 ############################################################################
@@ -128,7 +129,7 @@ class Packeter(object):
         buf = size_to_bin(len(buf)) + buf
         conn.send_buffer.put(buf)
         self._queued_packets.append((len(buf), packet_id))
-        self._on_ready_to_send(conn_id)
+        self._send_to_link(conn_id, conn)
 
         return packet_id
 
@@ -165,17 +166,28 @@ class Packeter(object):
 
     ###########################################################
 
-    def _on_ready_to_send(self, conn_id):
+    def _on_ready_to_send(self, conn_id, sent_length):
         conn = self._connections[conn_id]
+        conn.send_in_progress = False
+
+        conn.send_buffer.cut(sent_length)
+        while sent_length > 0:
+            first, packet_id = self._queued_packets.popleft()
+            if first <= sent_length:
+                self.on_packet_sent(conn_id, packet_id)
+            else:
+                self._queued_packets.appendleft((first - sent_length,
+                                                packet_id))
+            sent_length -= first
+
+        self._send_to_link(conn_id, conn)
+
+    ###########################################################
+
+    def _send_to_link(self, conn_id, conn):
+        if conn.send_in_progress:
+            return
         buf = conn.send_buffer.get(SEND_BLOCK_SIZE, False)
         if buf:
-            sent_length = self.link.send(conn_id, buf)
-            conn.send_buffer.cut(sent_length)
-            while sent_length > 0:
-                first, packet_id = self._queued_packets.popleft()
-                if first <= sent_length:
-                    self.on_packet_sent(conn_id, packet_id)
-                else:
-                    self._queued_packets.appendleft((first - sent_length,
-                                                    packet_id))
-                sent_length -= first
+            self.link.send(conn_id, buf)
+            conn.send_in_progress = True

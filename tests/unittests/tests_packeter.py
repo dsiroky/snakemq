@@ -21,15 +21,21 @@ TEST_PORT = 40000
 #############################################################################
 
 class TestPacketer(utils.TestCase):
+    def create_links(self):
+        link_server = snakemq.link.Link()
+        link_server.add_listener(("", TEST_PORT))
+        link_client = snakemq.link.Link()
+        link_client.add_connector(("localhost", TEST_PORT))
+        return link_server, link_client
+
+    ########################################################
+
     def run_srv_cli(self, server, client):
         """
         Server is executed in a thread.
         """
-        link_server = snakemq.link.Link()
-        link_server.add_listener(("", TEST_PORT))
+        link_server, link_client = self.create_links()
         packeter_server = snakemq.packeter.Packeter(link=link_server)
-        link_client = snakemq.link.Link()
-        link_client.add_connector(("localhost", TEST_PORT))
         packeter_client = snakemq.packeter.Packeter(link=link_client)
 
         thr_server = threading.Thread(target=server, args=[link_server,
@@ -112,3 +118,16 @@ class TestPacketer(utils.TestCase):
         self.run_srv_cli(server, client)
         self.assertEqual(to_send, container["received"],
                         (len(to_send), len(container["received"])))
+
+#############################################################################
+#############################################################################
+
+class TestPacketerSSL(TestPacketer):
+    def create_links(self):
+        cfg = snakemq.link.SSLConfig("testkey.pem", "testcert.pem")
+        link_server = snakemq.link.Link()
+        link_server.add_listener(("", TEST_PORT), ssl_config=cfg)
+        link_client = snakemq.link.Link()
+        link_client.add_connector(("localhost", TEST_PORT), ssl_config=cfg)
+        return link_server, link_client
+
