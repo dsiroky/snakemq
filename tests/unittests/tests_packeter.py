@@ -17,6 +17,8 @@ import utils
 
 TEST_PORT = 40000
 
+LOOP_RUNTIME = 1.5
+
 #############################################################################
 #############################################################################
 
@@ -65,7 +67,7 @@ class TestPacketer(utils.TestCase):
 
             packeter.on_packet_recv = on_recv
             packeter.on_disconnect = on_disconnect
-            link.loop(runtime=0.5)
+            link.loop(runtime=LOOP_RUNTIME)
 
         def client(link, packeter):
             def on_connect(conn_id):
@@ -78,7 +80,7 @@ class TestPacketer(utils.TestCase):
             packeter.on_connect = on_connect
             packeter.on_disconnect = on_disconnect
             try:
-                link.loop(runtime=0.5)
+                link.loop(runtime=LOOP_RUNTIME)
             except Exception as e:
                 import traceback
                 traceback.print_exc()
@@ -89,7 +91,8 @@ class TestPacketer(utils.TestCase):
     ########################################################
 
     def test_large_packet(self):
-        to_send = b"abcd" * 1000000 # something "big enough"
+        to_send = b"abcd" * 200000 # something "big enough"
+        assert len(to_send) > snakemq.packeter.SEND_BLOCK_SIZE
         container = {"received": None}
 
         def server(link, packeter):
@@ -102,7 +105,7 @@ class TestPacketer(utils.TestCase):
 
             packeter.on_packet_recv = on_recv
             packeter.on_disconnect = on_disconnect
-            link.loop(runtime=0.5)
+            link.loop(runtime=LOOP_RUNTIME)
 
         def client(link, packeter):
             def on_connect(conn_id):
@@ -113,7 +116,7 @@ class TestPacketer(utils.TestCase):
 
             packeter.on_connect = on_connect
             packeter.on_disconnect = on_disconnect
-            link.loop(runtime=0.5)
+            link.loop(runtime=LOOP_RUNTIME)
 
         self.run_srv_cli(server, client)
         self.assertEqual(to_send, container["received"],

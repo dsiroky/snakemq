@@ -27,7 +27,56 @@ LOOP_RUNTIME_ASSERT = 1.2  # SSL needs more time, this should be fine
 #############################################################################
 #############################################################################
 
+class TestConnector(utils.TestCase):
+    def setUp(self):
+        self.link = snakemq.link.Link()
+
+    ########################################################
+
+    def tearDown(self):
+        self.link.cleanup()
+
+    ########################################################
+
+    def test_connector_cleanup(self):
+        addr = self.link.add_connector(("localhost", TEST_PORT))
+        self.link.connect(addr)
+        self.link.del_connector(addr)
+        self.assertEqual(len(self.link._socks_waiting_to_connect), 0)
+
+    ########################################################
+
+    def test_connection_refused(self):
+        addr = self.link.add_connector(("localhost", TEST_PORT))
+        link_w = mock.Mock(wraps=self.link)
+        with mock.patch.object(self.link, "handle_conn_refused",
+                                link_w.handle_conn_refused):
+            with mock.patch.object(self.link, "connect",
+                                link_w.connect):
+                if not self.link.connect(addr):
+                    # if the refusal did not happen in connect then it must
+                    # happen in the next poll round
+                    # MS Windows has long poll/select reaction (aroung 1s)
+                    self.link.poll(2)
+        # just make sure that the connection failed
+        self.assertEqual(link_w.connect.call_count, 1)
+        self.assertEqual(link_w.handle_conn_refused.call_count, 1)
+        self.assertEqual(len(self.link._socks_waiting_to_connect), 0)
+        self.link.del_connector(addr)
+
+#############################################################################
+#############################################################################
+
 class TestLink(utils.TestCase):
+    def setUp(self):
+        self.link_server, self.link_client = self.create_links()
+
+    def tearDown(self):
+        self.link_server.cleanup()
+        self.link_client.cleanup()
+
+    ########################################################
+
     def create_links(self):
         link_server = snakemq.link.Link()
         link_server.add_listener(("", TEST_PORT))
@@ -38,16 +87,13 @@ class TestLink(utils.TestCase):
     ########################################################
 
     def run_srv_cli(self, server, client):
-        link_server, link_client = self.create_links()
-
-        thr_server = threading.Thread(target=server, args=[link_server], name="srv")
+        thr_server = threading.Thread(target=server, args=[self.link_server],
+                                      name="srv")
         thr_server.start()
         try:
-            client(link_client)
+            client(self.link_client)
         finally:
             thr_server.join()
-            link_server.cleanup()
-            link_client.cleanup()
 
     ########################################################
 
@@ -86,73 +132,6 @@ class TestLink(utils.TestCase):
         received = b"".join(container["received"])
         self.assertEqual(container["sent"], received,
                         (len(container["sent"]), len(received)))
-
-    ########################################################
-
-    def test_connector_cleanup(self):
-        link = snakemq.link.Link()
-        addr = link.add_connector(("localhost", TEST_PORT))
-        link._connect(addr)
-        link.del_connector(addr)
-        self.assertEqual(len(link._socks_waiting_to_connect), 0)
-        link.cleanup()
-
-    ########################################################
-
-    def test_connector_cleanup_connection_refused(self):
-        link = snakemq.link.Link()
-        addr = link.add_connector(("localhost", TEST_PORT))
-        link_w = mock.Mock(wraps=link)
-        with mock.patch.object(link, "handle_conn_refused",
-                                link_w.handle_conn_refused):
-            with mock.patch.object(link, "_connect",
-                                link_w._connect):
-                if not link._connect(addr):
-                    # if the refusal did not happen in_connect then it must
-                    # happen in the next poll round
-                    # MS Windows has long poll/select reaction (aroung 1s)
-                    link.poll(2)
-        # just make sure that the connection failed
-        self.assertEqual(link_w._connect.call_count, 1)
-        self.assertEqual(link_w.handle_conn_refused.call_count, 1)
-        self.assertEqual(len(link._socks_waiting_to_connect), 0)
-        link.del_connector(addr)
-        link.cleanup()
-
-    ########################################################
-
-    def test_bell_pipe(self):
-        link = snakemq.link.Link()
-        buf = b"abc"
-        link._poll_bell.write(buf)
-        self.assertEqual(link._poll_bell.read(len(buf)), buf)
-
-    ########################################################
-
-    def test_bell_wakeup(self):
-        """
-        Bell must fire event only on wake up call. Otherwise it must block the
-        poll.
-        """
-        link = snakemq.link.Link()
-        bell_rd = link._poll_bell.r
-        
-        # no event, no descriptor returned by poll
-        self.assertEqual(len(link.poll(0)), 0)
-        
-        link.wakeup_poll()
-        fds = link.poll(1.0)
-        self.assertEqual(len(fds), 1)
-        print (repr(fds))
-        self.assertEqual(fds[0][0], bell_rd)
-
-        # make sure that the pipe is flushed after wakeup
-        try:
-            link._poll_bell.read(1)
-        except OSError as exc:
-            self.assertEqual(exc.errno, errno.EAGAIN)
-        else:
-            self.fail()
 
     ########################################################
 
@@ -206,6 +185,7 @@ class TestLinkSSL(TestLink):
 #############################################################################
 #############################################################################
 
+"""
 class TestLinkSSLFailures(utils.TestCase):
     def test_handshake(self):
         pass # TODO
@@ -215,3 +195,41 @@ class TestLinkSSLFailures(utils.TestCase):
 
     def test_send(self):
         pass # TODO
+"""
+
+#############################################################################
+#############################################################################
+
+class TestBell(utils.TestCase):
+    def test_bell_pipe(self):
+        link = snakemq.link.Link()
+        buf = b"abc"
+        link._poll_bell.write(buf)
+        self.assertEqual(link._poll_bell.read(len(buf)), buf)
+
+    ########################################################
+
+    def test_bell_wakeup(self):
+        """
+        Bell must fire event only on wake up call. Otherwise it must block the
+        poll.
+        """
+        link = snakemq.link.Link()
+        bell_rd = link._poll_bell.r
+        
+        # no event, no descriptor returned by poll
+        self.assertEqual(len(link.poll(0)), 0)
+        
+        link.wakeup_poll()
+        fds = link.poll(1.0)
+        self.assertEqual(len(fds), 1)
+        self.assertEqual(fds[0][0], bell_rd)
+
+        # make sure that the pipe is flushed after wakeup
+        try:
+            link._poll_bell.read(1)
+        except OSError as exc:
+            self.assertEqual(exc.errno, errno.EAGAIN)
+        else:
+            self.fail()
+

@@ -228,7 +228,7 @@ class Link(object):
 
         self.poller = epoll()
         self._poll_bell = Bell()
-        self.log.debug("poll bell fd=%r" % self._poll_bell)
+        self.log.debug("poll bell %r" % self._poll_bell)
         self.poller.register(self._poll_bell.r, select.EPOLLIN)  # read part
 
         self._sock_by_fd = {}
@@ -471,7 +471,7 @@ class Link(object):
 
     ##########################################################
 
-    def _connect(self, address):
+    def connect(self, address):
         """
         Try to make an actual connection.
         :return: True if connected
@@ -579,11 +579,10 @@ class Link(object):
         # do not put it in a draining cycle to avoid other links starvation
         try:
             fragment = sock.recv(self.recv_block_size)
-            if fragment:
-                self.log.debug("recv %s len=%i" % (conn_id, len(fragment)))
-                self.on_recv(conn_id, fragment)
-            else:
-                self.handle_close(sock)
+        except ssl.SSLError as exc:
+            if exc.args[0] != ssl.SSL_ERROR_WANT_READ:
+                raise
+            # wait for next round, SSL context has not enough data do decrypt
         except socket.error as exc:
             # TODO catch SSL exceptions
             err = exc.args[0]
@@ -594,6 +593,12 @@ class Link(object):
                 self.handle_close(sock)
             elif err != errno.EWOULDBLOCK:
                 raise
+        else:
+            if fragment:
+                self.log.debug("recv %s len=%i" % (conn_id, len(fragment)))
+                self.on_recv(conn_id, fragment)
+            else:
+                self.handle_close(sock)
 
     ##########################################################
 
@@ -710,7 +715,7 @@ class Link(object):
             reconnect_interval = self._reconnect_intervals[address]
             if (when <= now) or (when > now + reconnect_interval * 2):
                 to_remove += 1
-                self._connect(address)
+                self.connect(address)
             else:
                 break
 
