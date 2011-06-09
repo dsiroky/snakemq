@@ -1,5 +1,16 @@
 Changelog
 =========
+0.5.5
+  * fix MS Windows SSL
+  * messaging example with SSL
+  * fix Python 3 syntax
+  * updated documentation, RPC
+  * RPC module moved from package snakemq.contrib to snakemq
+  * message TTL can be set to None (infinity)
+  * Link.send() does not return amount of sent bytes, moved to Link.on_ready_to_send
+  * removed snakemq.init()
+  * internal refactorizations
+
 0.5.4
   * SSL
   * MongoDB storage
