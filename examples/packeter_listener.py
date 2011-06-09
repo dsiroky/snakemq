@@ -14,7 +14,7 @@ def on_recv(conn, packet):
     print("received from", conn, packet)
     pktr.send_packet(conn, b"hi")
 
-snakemq.init()
+snakemq.init_logging()
 logger = logging.getLogger("snakemq")
 logger.setLevel(logging.DEBUG)
 

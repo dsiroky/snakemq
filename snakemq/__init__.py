@@ -10,14 +10,9 @@ import logging
 ############################################################################
 ############################################################################
 
-def init():
-    init_logging()
-
-#################################################################
-
 def init_logging():
     """
-    Initialize logging
+    Initialize logging to standard output.
     """
     logger = logging.getLogger("snakemq")
     logger.setLevel(logging.CRITICAL)

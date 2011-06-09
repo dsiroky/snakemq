@@ -13,7 +13,6 @@ Import modules::
 
 Build stack::
     
-  snakemq.init()
   my_link = snakemq.link.Link()
   my_packeter = snakemq.packeter.Packeter(my_link)
   my_messaging = snakemq.messaging.Messaging(MY_IDENT, "", my_packeter)
@@ -86,7 +85,9 @@ Logging
 If you want to see what is going on inside::
 
   import logging
+  import snakemq
 
+  snakemq.init_logging()
   logger = logging.getLogger("snakemq")
   logger.setLevel(logging.DEBUG)
 

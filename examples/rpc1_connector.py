@@ -33,7 +33,7 @@ def f():
             s.stop()
         time.sleep(2)
 
-snakemq.init()
+snakemq.init_logging()
 
 logger = logging.getLogger("snakemq")
 logger.setLevel(logging.DEBUG)
