@@ -11,14 +11,13 @@ import snakemq
 import snakemq.link
 import snakemq.packeter
 import snakemq.messaging
-from snakemq.message import Message
-from snakemq.contrib import rpc
+import snakemq.rpc
 
 class A(object):
     def get_fo(self):
         return "fo value"
 
-    @rpc.as_signal
+    @snakemq.rpc.as_signal
     def mysignal(self):
         print("mysignal")
 
@@ -33,7 +32,7 @@ s.add_listener(("", 4000))
 tr = snakemq.packeter.Packeter(s)
 m = snakemq.messaging.Messaging("boss", "", tr)
 rh = snakemq.messaging.ReceiveHook(m)
-srpc = rpc.RpcServer(rh)
+srpc = snakemq.rpc.RpcServer(rh)
 srpc.register_object(A(), "abc")
 
 s.loop()

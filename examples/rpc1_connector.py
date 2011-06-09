@@ -13,8 +13,7 @@ import snakemq.link
 import snakemq.packeter
 import snakemq.messaging
 import snakemq.queues
-from snakemq.message import Message
-from snakemq.contrib import rpc
+import snakemq.rpc
 
 class B(object):
     def wer(self):
@@ -52,8 +51,8 @@ t.start()
 
 rh = snakemq.messaging.ReceiveHook(m)
 
-crpc = rpc.RpcClient(rh)
-srpc = rpc.RpcServer(rh)
+crpc = snakemq.rpc.RpcClient(rh)
+srpc = snakemq.rpc.RpcServer(rh)
 srpc.register_object(B(), "b")
 
 proxy = crpc.get_proxy("boss", "abc")

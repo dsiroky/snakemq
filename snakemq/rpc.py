@@ -80,8 +80,8 @@ class RpcServer(object):
         self.receive_hook = receive_hook
         receive_hook.register(REQUEST_PREFIX, self.on_recv)
         self.instances = {}
-        #: transmit call exception back to client (only for non-signal calls)
-        self.transmit_exceptions = True
+        #: transfer call exception back to client (only for non-signal calls)
+        self.transfer_exceptions = True
 
     ######################################################
 
@@ -143,7 +143,7 @@ class RpcServer(object):
             if params["command"] == "call":
                 self.send_return(ident, params["req_id"], ret)
         except Exception as exc:
-            if self.transmit_exceptions and not has_signal_attr:
+            if self.transfer_exceptions and not has_signal_attr:
                 self.send_exception(ident, params["req_id"], exc)
             else:
                 raise
@@ -308,7 +308,7 @@ class RpcClient(object):
                                   self.connected.get(remote_ident)):
                             self.cond.wait()
                     if self.connected.get(remote_ident):
-                        res = self.results[req_id]
+                        res = self.results.pop(req_id)
                         break
                     else:
                         self.cond.wait()  # for signal from connect/di

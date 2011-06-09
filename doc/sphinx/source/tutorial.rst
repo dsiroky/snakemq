@@ -93,7 +93,7 @@ If you want to see what is going on inside::
 -----------
 SSL context
 -----------
-To make the link secure just add SSL configuration::
+To make the link secure add :class:`~.snakemq.link.SSLConfig`::
 
   sslcfg = snakemq.link.SSLConfig("testkey.pem", "testcert.pem")
 
@@ -103,3 +103,65 @@ To make the link secure just add SSL configuration::
   # peer B
   my_link.add_connector(("localhost", 4000), ssl_config=sslcfg)
 
+---------------------
+Remote Procedure Call
+---------------------
+SnakeMQ's RPC implementation has a huge advantage - you don't need to take care
+of connectivity/reconnections. Register your objects and call their
+methods whenever it is needed. Since the messaging is symmetrical then both
+peers can act as server and client at the same time.
+
+Two kinds of calls:
+  - `Regular call with response` - calling will be blocking until the remote
+    side connects and returns result. Remote exceptions can be propagated as well.
+    If the connection is broken during the call then the client will attempt to
+    perform the call again until it gets any result. This may lead to
+    starvation on the client side (TODO).
+  - `Signal call without response` - calling is not blocking and returns
+    ``None``. You can set TTL of the signal.
+
+Call kinds can't be combined. If a method is marked as a signal then it can be
+called only as a signal.
+
+Build stack for messaging and add::
+
+    import snakemq.rpc
+
+    # following class is needed to route messages to RPC
+    rh = snakemq.messaging.ReceiveHook(my_messaging)
+
+Server::
+
+    class MyClass(object):
+        def get_fo(self):
+            return "fo value"
+
+        @snakemq.rpc.as_signal  # mark method as a signal
+        def mysignal(self):
+            print("signal")
+
+    srpc = snakemq.rpc.RpcServer(rh)
+    srpc.register_object(MyClass(), "myinstance")
+    my_link.loop()
+
+Client::
+
+    crpc = snakemq.rpc.RpcClient(rh)
+    proxy = crpc.get_proxy(REMOTE_IDENT, "myinstance")
+    proxy.as_signal("mysignal", 10)  # 10 seconds TTL
+    my_link.loop()
+
+    # in a different thread:
+    proxy.mysignal()  # not blocking
+    proxy.get_fo()  # blocks until server responds
+
+Exceptions
+----------
+Propagation of remote exceptions is turned on by default. It can be disabled on
+the server side::
+
+    srpc.transfer_exceptions = False
+
+If the exception is transfered and raised on the client side then it has local
+traceback. Remote traceback is stored in a attribute
+``exception.__remote_traceback__``.
