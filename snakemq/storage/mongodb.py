@@ -44,8 +44,8 @@ class MongoDbQueuesStorage(QueuesStorageBase):
 
     def get_items(self, queue_name):
         items = []
-        dbitems = self.all_items.find({"queue_name": queue_name},
-                                      sort=[("ttl", pymongo.ASCENDING)])
+        # XXX this might need some explicit sorting
+        dbitems = self.all_items.find({"queue_name": queue_name})
         for item in dbitems:
             items.append(Message(uuid=a2b_base64(item["uuid"]),
                                   data=a2b_base64(item["data"]),

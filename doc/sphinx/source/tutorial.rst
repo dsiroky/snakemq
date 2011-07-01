@@ -164,5 +164,5 @@ the server side::
     srpc.transfer_exceptions = False
 
 If the exception is transfered and raised on the client side then it has local
-traceback. Remote traceback is stored in a attribute
+traceback. Remote traceback is stored in attribute
 ``exception.__remote_traceback__``.

@@ -1,5 +1,9 @@
 Changelog
 =========
+0.5.6
+  * SQLAlchemy storage
+  * MongoDB queue ordering fix
+
 0.5.5
   * fix MS Windows SSL
   * messaging example with SSL

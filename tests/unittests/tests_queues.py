@@ -22,6 +22,13 @@ except ImportError:
     has_mongodb = False
     warnings.warn("missing MongoDB", RuntimeWarning)
 
+try:
+    from snakemq.storage.sqla import SqlAlchemyQueuesStorage
+    has_sqlalchemy = True
+except ImportError:
+    has_sqlalchemy = False
+    warnings.warn("missing SQLAlchemy", RuntimeWarning)
+
 import utils
 
 ############################################################################
@@ -273,6 +280,38 @@ class BaseTestStorageMixin(object):
         cur_msg = self.storage.get_items("q1")[0]
         self.assertEqual(cur_msg.ttl, None)
 
+    ####################################################
+
+    def test_delete_items(self):
+        items = (Message(b"a"), Message(b"b"), Message(b"c"))
+        for item in items:
+            self.storage.push("q1", item)
+        self.assertEqual(len(self.storage.get_items("q1")), len(items))
+        self.storage.delete_items([items[0]])
+        self.assertEqual(len(self.storage.get_items("q1")), len(items) - 1)
+        self.storage.delete_items(items[1:])
+        self.assertEqual(len(self.storage.get_items("q1")), 0)
+
+    ####################################################
+
+    def test_update_ttl(self):
+        msg = Message(b"a", ttl=10)
+        self.storage.push("q1", msg)
+        self.storage.push("q1", Message(b"b", ttl=5))
+
+        msg.ttl = 20
+        self.storage.update_items_ttl([msg])
+        items = self.storage.get_items("q1")
+        self.assertEqual(items[0].ttl, 20) # only this message must be updated
+        self.assertEqual(items[1].ttl, 5) # this must stay unmodified
+
+    ####################################################
+
+    def test_queue_ordering(self):
+        self.storage.push("q1", Message(b"a"))
+        self.storage.push("q1", Message(b"b"))
+        self.assertEqual(self.storage.get_items("q1")[0].data, b"a")
+
 ############################################################################
 ############################################################################
 
@@ -316,3 +355,18 @@ class TestMongoDbStorage(BaseTestStorageMixin, utils.TestCase):
     def delete_storage(self):
         # nothing to delete
         pass
+
+############################################################################
+############################################################################
+
+class TestSqlAlchemyPgsqlStorage(BaseTestStorageMixin, utils.TestCase):
+    __test__ = has_sqlalchemy
+    URL = "postgresql://hasan:aaa@localhost/test"
+
+    def storage_factory(self):
+        self.storage = SqlAlchemyQueuesStorage(self.URL)
+        self.storage.create_structures()
+
+    def delete_storage(self):
+        self.storage = SqlAlchemyQueuesStorage(self.URL)
+        self.storage.drop_structures()

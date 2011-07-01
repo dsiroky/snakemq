@@ -18,6 +18,7 @@ setup(name="snakeMQ",
           "License :: OSI Approved :: MIT License",
           "Topic :: System :: Networking",
           "Topic :: Communications",
+          "Topic :: Software Development :: Libraries",
           "Programming Language :: Python :: 2",
           "Programming Language :: Python :: 3"
         ],
