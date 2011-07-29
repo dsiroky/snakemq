@@ -4,15 +4,15 @@ communication between hosts.
 Features
 ========
   * pure Python
-  * cross-platform - tested under Linux and MS Windows
-  * symmetrical - single TCP connection for duplex communication
-  * asynchronous - poll()
   * automatic reconnect
   * reliable delivery - configurable message role and delivery timeout
   * persistent/transient queues
+  * asynchronous - polling
+  * symmetrical - single TCP connection for duplex communication
   * multiple storage options - SQLite, MongoDB, ...
   * brokerless - similar philosophy like `ZeroMQ <http://www.zeromq.org/>`_
   * additional modules - RPC
+  * cross-platform - tested under Linux and MS Windows
 
 Homepage
 ========

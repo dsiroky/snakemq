@@ -22,6 +22,19 @@ class TestMessaging(utils.TestCase):
             messaging._on_packet_recv("", messaging.frame_protocol_version())
         self.assertEqual(parse_mock.call_count, 1)
 
+    ##############################################################
+
+    def test_two_connecting_same_ident(self):
+        """
+        Second connecting peer with the same ident must be rejected.
+        """
+        packeter = mock.Mock()
+        messaging = snakemq.messaging.Messaging("someident", "", packeter)
+        messaging.parse_identification("peerident", "conn_id1")
+        messaging.parse_identification("peerident", "conn_id2")
+        self.assertEqual(len(messaging._ident_by_conn), 1)
+        self.assertEqual(len(messaging._conn_by_ident), 1)
+
 #############################################################################
 #############################################################################
 

@@ -138,7 +138,13 @@ class Messaging(object):
         self.log.debug("conn=%s remote ident '%s'" % (conn_id, remote_ident))
 
         if conn_id in self._ident_by_conn:
-            # avoid multiple identifications
+            # avoid multiple identifications from the same peer
+            return
+
+        if remote_ident in self._conn_by_ident:
+            # two peers with the same identifications can't be allowed
+            self.log.debug("duplicate ident '%s'" % (remote_ident))
+            self.packeter.link.close(conn_id)
             return
 
         with self._lock:

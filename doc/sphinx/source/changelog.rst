@@ -1,5 +1,8 @@
 Changelog
 =========
+0.5.7
+  * fix multiple connecting peers with the same identification
+
 0.5.6
   * SQLAlchemy storage
   * MongoDB queue ordering fix
