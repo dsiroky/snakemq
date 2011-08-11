@@ -37,6 +37,12 @@ class SnakeMQIncompatibleProtocol(SnakeMQException):
     """
     pass
 
+class SnakeMQNoIdent(SnakeMQException):
+    """
+    Remote side did not identified itself.
+    """
+    pass
+
 class SnakeMQUnknownRoute(SnakeMQException):
     """
     Message destination/route unknown.

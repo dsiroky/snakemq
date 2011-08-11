@@ -6,8 +6,10 @@
 """
 
 import mock
+import nose
 
 import snakemq.messaging
+import snakemq.exceptions
 
 import utils
 
@@ -15,11 +17,15 @@ import utils
 #############################################################################
 
 class TestMessaging(utils.TestCase):
-    def test_recv_frame_type(self):
+    def setUp(self):
         packeter = mock.Mock()
-        messaging = snakemq.messaging.Messaging("someident", "", packeter)
-        with mock.patch.object(messaging, "parse_protocol_version") as parse_mock:
-            messaging._on_packet_recv("", messaging.frame_protocol_version())
+        self.messaging = snakemq.messaging.Messaging("someident", "", packeter)
+
+    ##############################################################
+
+    def test_recv_frame_type(self):
+        with mock.patch.object(self.messaging, "parse_protocol_version") as parse_mock:
+            self.messaging._on_packet_recv("", self.messaging.frame_protocol_version())
         self.assertEqual(parse_mock.call_count, 1)
 
     ##############################################################
@@ -28,12 +34,22 @@ class TestMessaging(utils.TestCase):
         """
         Second connecting peer with the same ident must be rejected.
         """
-        packeter = mock.Mock()
-        messaging = snakemq.messaging.Messaging("someident", "", packeter)
-        messaging.parse_identification(b"peerident", "conn_id1")
-        messaging.parse_identification(b"peerident", "conn_id2")
-        self.assertEqual(len(messaging._ident_by_conn), 1)
-        self.assertEqual(len(messaging._conn_by_ident), 1)
+        self.messaging.parse_identification(b"peerident", "conn_id1")
+        self.messaging.parse_identification(b"peerident", "conn_id2")
+        self.assertEqual(len(self.messaging._ident_by_conn), 1)
+        self.assertEqual(len(self.messaging._conn_by_ident), 1)
+
+    ##############################################################
+
+    @nose.tools.raises(snakemq.exceptions.SnakeMQNoIdent)
+    def test_message_parse_no_ident(self):
+        """
+        Peer did not identified itself and sends message.
+        """
+        self.assertEqual(len(self.messaging._ident_by_conn), 0)
+        self.messaging.parse_message(
+                          "x" * snakemq.messaging.FRAME_FORMAT_MESSAGE_SIZE,
+                          "nonexistent connid")
 
 #############################################################################
 #############################################################################

@@ -22,7 +22,7 @@ import threading
 import re
 
 from snakemq.exceptions import (SnakeMQBrokenMessage, SnakeMQException,
-                                SnakeMQIncompatibleProtocol)
+                                SnakeMQIncompatibleProtocol, SnakeMQNoIdent)
 from snakemq.queues import QueuesManager
 from snakemq.message import Message
 from snakemq.callbacks import Callback
@@ -159,11 +159,16 @@ class Messaging(object):
         if len(payload) < FRAME_FORMAT_MESSAGE_SIZE:
             raise SnakeMQBrokenMessage("message")
 
+        try:
+            ident = self._ident_by_conn[conn_id]
+        except KeyError:
+            raise SnakeMQNoIdent(conn_id)
+
         muuid, ttl, flags = struct.unpack(FRAME_FORMAT_MESSAGE,
                                           payload[:FRAME_FORMAT_MESSAGE_SIZE])
         message = Message(data=bytes(payload[FRAME_FORMAT_MESSAGE_SIZE:]),
                           uuid=muuid, ttl=ttl, flags=flags)
-        self.on_message_recv(conn_id, self._ident_by_conn[conn_id], message)
+        self.on_message_recv(conn_id, ident, message)
 
     ###########################################################
 
