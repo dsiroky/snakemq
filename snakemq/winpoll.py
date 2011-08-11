@@ -21,7 +21,10 @@ class Epoll(object):
         self.fds[fd] = eventmask
 
     def unregister(self, fd):
-        del self.fds[fd]
+        try:
+            del self.fds[fd]
+        except KeyError:
+            pass
 
     def modify(self, fd, eventmask):
         self.fds[fd] = eventmask
