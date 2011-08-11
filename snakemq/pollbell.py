@@ -48,13 +48,13 @@ class WinBell(BellBase):
     """
     def __init__(self):
         r = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        r.setblocking(False)
         r.bind(("127.0.0.1", 0))
         r.listen(1)
         self.sw = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sw.connect(r.getsockname())
         self.w = self.sw.fileno()
         self.sr = r.accept()[0]
+        self.sr.setblocking(False)
         self.r = self.sr.fileno()
         r.close()
 

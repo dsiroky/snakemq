@@ -30,8 +30,8 @@ class TestMessaging(utils.TestCase):
         """
         packeter = mock.Mock()
         messaging = snakemq.messaging.Messaging("someident", "", packeter)
-        messaging.parse_identification("peerident", "conn_id1")
-        messaging.parse_identification("peerident", "conn_id2")
+        messaging.parse_identification(b"peerident", "conn_id1")
+        messaging.parse_identification(b"peerident", "conn_id2")
         self.assertEqual(len(messaging._ident_by_conn), 1)
         self.assertEqual(len(messaging._conn_by_ident), 1)
 
