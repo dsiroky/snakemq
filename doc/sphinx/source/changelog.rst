@@ -1,5 +1,11 @@
 Changelog
 =========
+0.5.8
+  * keep-alive - ping/pong to test if the peer connection is alive
+  * fix MSW poll bell nonblocking issue
+  * fix message without previous identification
+  * fix link connect ENETUNREACH
+
 0.5.7
   * fix multiple connecting peers with the same identification
 
