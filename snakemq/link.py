@@ -486,7 +486,7 @@ class Link(object):
         if err in (0, errno.EISCONN):
             self.handle_connect(sock)
             return True
-        elif err == (errno.ECONNREFUSED):
+        elif err in (errno.ECONNREFUSED, errno.ENETUNREACH):
             self.handle_conn_refused(sock)
         elif err not in (errno.EINPROGRESS, errno.EWOULDBLOCK):
             raise socket.error(err, errno.errorcode[err])

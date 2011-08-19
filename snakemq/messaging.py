@@ -20,6 +20,7 @@ import struct
 import logging
 import threading
 import re
+import time
 
 from snakemq.exceptions import (SnakeMQBrokenMessage, SnakeMQException,
                                 SnakeMQIncompatibleProtocol, SnakeMQNoIdent)
@@ -47,6 +48,8 @@ FRAME_TYPE_PROTOCOL_VERSION = 0
 FRAME_TYPE_INCOMPATIBLE_PROTOCOL = 1
 FRAME_TYPE_IDENTIFICATION = 2
 FRAME_TYPE_MESSAGE = 3
+FRAME_TYPE_PING = 4
+FRAME_TYPE_P0NG = 5
 
 FRAME_TYPE_TYPE = "B"
 FRAME_TYPE_SIZE = 1  # 1 byte
@@ -77,6 +80,10 @@ class Messaging(object):
         self.queues_manager = QueuesManager(queues_storage)
         self.log = logging.getLogger("snakemq.messaging")
 
+        #: time to ping, in seconds (None = no keepalive)
+        self.keepalive_interval = None
+        self.keepalive_wait = 0.5  #: wait for pong, in seconds
+
         #{ callbacks
         self.on_error = Callback()  #: ``func(conn_id, exception)``
         self.on_message_recv = Callback()  #: ``func(conn_id, ident, message)``
@@ -86,6 +93,7 @@ class Messaging(object):
 
         self._ident_by_conn = {}
         self._conn_by_ident = {}
+        self._keepalive = {}  #: conn_id:[last_recv, last_ping]
 
         packeter.link.on_loop_pass.add(self._on_link_loop_pass)
         packeter.on_connect.add(self._on_connect)
@@ -96,13 +104,20 @@ class Messaging(object):
 
     ###########################################################
 
+    def _touch_keepalive(self, conn_id):
+        self._keepalive[conn_id] = [time.time(), None]
+
+    ###########################################################
+
     def _on_connect(self, conn_id):
+        self._touch_keepalive(conn_id)
         self.send_protocol_version(conn_id)
         self.send_identification(conn_id)
 
     ###########################################################
 
     def _on_disconnect(self, conn_id):
+        del self._keepalive[conn_id]
         if conn_id not in self._ident_by_conn:
             return
 
@@ -173,6 +188,7 @@ class Messaging(object):
     ###########################################################
 
     def _on_packet_recv(self, conn_id, packet):
+        self._touch_keepalive(conn_id)
         try:
             if len(packet) < MIN_FRAME_SIZE:
                 raise SnakeMQBrokenMessage("too small")
@@ -189,6 +205,8 @@ class Messaging(object):
                 self.parse_identification(bytes(payload), conn_id)
             elif frame_type == FRAME_TYPE_MESSAGE:
                 self.parse_message(payload, conn_id)
+            elif frame_type == FRAME_TYPE_PING:
+                self.send_pong(conn_id)
         except SnakeMQException as exc:
             self.log.error("conn=%s ident=%s %r" %
                   (conn_id, self._ident_by_conn.get(conn_id), exc))
@@ -237,7 +255,37 @@ class Messaging(object):
 
     ###########################################################
 
+    def send_ping(self, conn_id):
+        self._keepalive[conn_id][1] = time.time()
+        ping = struct.pack(FRAME_TYPE_TYPE, FRAME_TYPE_PING)
+        self.packeter.send_packet(conn_id, ping)
+
+    ###########################################################
+
+    def send_pong(self, conn_id):
+        pong = struct.pack(FRAME_TYPE_TYPE, FRAME_TYPE_P0NG)
+        self.packeter.send_packet(conn_id, pong)
+
+    ###########################################################
+
+    def _manage_pings(self):
+        if self.keepalive_interval is None:
+            return
+
+        now = time.time()
+        for conn_id, (last_recv, last_ping) in self._keepalive.items():
+            if last_recv > now - self.keepalive_interval:
+                # something was received recently, no need for keepalive
+                continue
+            if last_ping is None:
+                self.send_ping(conn_id)
+            elif last_ping < now - self.keepalive_wait:
+                self.packeter.link.close(conn_id)
+
+    ###########################################################
+
     def _on_link_loop_pass(self):
+        self._manage_pings()
         for ident, conn_id in self._conn_by_ident.items():
             with self._lock:
                 queue = self.queues_manager.get_queue(ident)
