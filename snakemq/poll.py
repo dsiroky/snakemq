@@ -1,19 +1,23 @@
 # -*- coding: utf-8 -*-
 """
-Stupid poll implementation for MS Win. Wrapper for select. Not working for file
-descriptors.
+Stupid poll implementation for non-epoll systems.
+Wrapper for select. Not working for file descriptors.
 """
 
 import select
-import socket
 import time
 
-select.EPOLLIN = 1
-select.EPOLLOUT = 4
-select.EPOLLERR = 8
-select.EPOLLHUP = 16
+#########################################################################
 
-class Epoll(object):
+if not hasattr(select, "epoll"):
+    select.EPOLLIN = 1
+    select.EPOLLOUT = 4
+    select.EPOLLERR = 8
+    select.EPOLLHUP = 16
+
+#########################################################################
+
+class SelectPoll(object):
     def __init__(self):
         self.fds = {}
 
@@ -60,3 +64,10 @@ class Epoll(object):
             res[fd] = res.get(fd, 0) | select.EPOLLERR
 
         return res.items()
+
+#########################################################################
+
+if hasattr(select, "epoll"):
+    poll = select.epoll
+else:
+    poll = SelectPoll

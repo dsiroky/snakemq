@@ -170,6 +170,13 @@ class TestLink(utils.TestCase):
 
         self.run_srv_cli(server, client)
 
+    ########################################################
+
+    def test_recv_on_closed_socket(self):
+        sock = snakemq.link.LinkSocket()
+        # this must not raise an exception
+        self.link_server.handle_recv(sock)
+
 #############################################################################
 #############################################################################
 

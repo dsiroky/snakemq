@@ -1,19 +1,19 @@
 Changelog
 =========
-0.5.8
+0.5.8 (2011-08-19)
   * keep-alive - ping/pong to test if the peer connection is alive
   * fix MSW poll bell nonblocking issue
   * fix message without previous identification
   * fix link connect ENETUNREACH
 
-0.5.7
+0.5.7 (2011-07-29)
   * fix multiple connecting peers with the same identification
 
-0.5.6
+0.5.6 (2011-07-01)
   * SQLAlchemy storage
   * MongoDB queue ordering fix
 
-0.5.5
+0.5.5 (2011-06-09)
   * fix MS Windows SSL
   * messaging example with SSL
   * fix Python 3 syntax
@@ -24,20 +24,20 @@ Changelog
   * removed snakemq.init()
   * internal refactorizations
 
-0.5.4
+0.5.4 (2011-05-22)
   * SSL
   * MongoDB storage
 
-0.5.3
+0.5.3 (2011-05-18
   * Python3 adaptation
 
-0.5.2
+0.5.2 (2011-05-15)
   * all callbacks can be bound to more then 1 callable
   * more examples
 
-0.5.1
+0.5.1 (2011-05-12)
   * fix poll and bell for MS Windows
   * fix RPC example
 
-0.5
+0.5 (2011-05-04)
   * initial release

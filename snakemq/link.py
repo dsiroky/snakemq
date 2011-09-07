@@ -16,12 +16,7 @@ import logging
 
 from snakemq.exceptions import SendNotFinished
 
-if os.name == "nt":
-    from snakemq.winpoll import Epoll
-    epoll = Epoll
-else:
-    epoll = select.epoll
-
+from snakemq.poll import poll
 from snakemq.pollbell import Bell
 from snakemq.callbacks import Callback
 
@@ -226,7 +221,7 @@ class Link(object):
 
         self._new_conn_id = 0  #: counter for conn id generator
 
-        self.poller = epoll()
+        self.poller = poll()
         self._poll_bell = Bell()
         self.log.debug("poll bell %r" % self._poll_bell)
         self.poller.register(self._poll_bell.r, select.EPOLLIN)  # read part
@@ -575,6 +570,9 @@ class Link(object):
 
     def handle_recv(self, sock):
         conn_id = sock.conn_id
+        if conn_id is None:
+            # socket could be closed in one poll round before recv
+            return
 
         # do not put it in a draining cycle to avoid other links starvation
         try:
