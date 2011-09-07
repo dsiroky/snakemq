@@ -61,6 +61,8 @@ FRAME_FORMAT_MESSAGE_SIZE = struct.calcsize(FRAME_FORMAT_MESSAGE)
 
 MIN_FRAME_SIZE = 1  # just the type field
 
+INFINITE_TTL = 0xffffffff
+
 ENCODING = "utf-8"
 
 #############################################################################
@@ -181,6 +183,8 @@ class Messaging(object):
 
         muuid, ttl, flags = struct.unpack(FRAME_FORMAT_MESSAGE,
                                           payload[:FRAME_FORMAT_MESSAGE_SIZE])
+        if ttl == INFINITE_TTL:
+            ttl = None
         message = Message(data=bytes(payload[FRAME_FORMAT_MESSAGE_SIZE:]),
                           uuid=muuid, ttl=ttl, flags=flags)
         self.on_message_recv(conn_id, ident, message)
@@ -243,11 +247,13 @@ class Messaging(object):
     ###########################################################
 
     def frame_message(self, message):
+        if message.ttl is None:
+            ttl = INFINITE_TTL
+        else:
+            ttl = int(message.ttl)
         return (struct.pack(FRAME_TYPE_TYPE, FRAME_TYPE_MESSAGE) +
                 struct.pack(FRAME_FORMAT_MESSAGE,
-                            message.uuid,
-                            int(message.ttl),
-                            message.flags) +
+                            message.uuid, ttl, message.flags) +
                 message.data)
 
     def send_message_frame(self, conn_id, message):

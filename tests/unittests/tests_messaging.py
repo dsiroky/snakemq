@@ -8,6 +8,7 @@
 import mock
 import nose
 
+import snakemq.message
 import snakemq.messaging
 import snakemq.exceptions
 
@@ -50,6 +51,37 @@ class TestMessaging(utils.TestCase):
         self.messaging.parse_message(
                           "x" * snakemq.messaging.FRAME_FORMAT_MESSAGE_SIZE,
                           "nonexistent connid")
+
+    ##############################################################
+
+    def test_message_frame(self):
+        self.messaging.on_message_recv = mock.Mock()
+        # dummy peer
+        self.messaging.parse_identification(b"peerident", "conn_id1")
+
+        msg = snakemq.message.Message(b"data", ttl=0x123456)
+        frame = self.messaging.frame_message(msg)
+        payload = frame[snakemq.messaging.FRAME_TYPE_SIZE:]
+        self.messaging.parse_message(payload, "conn_id1")
+        message = self.messaging.on_message_recv.call_args[0][2]
+        self.assertTrue(isinstance(message, snakemq.message.Message))
+        self.assertEqual(msg.data, message.data)
+        self.assertEqual(msg.uuid, message.uuid)
+        self.assertEqual(msg.ttl, message.ttl)
+
+    ##############################################################
+
+    def test_message_frame_infinite_ttl(self):
+        self.messaging.on_message_recv = mock.Mock()
+        # dummy peer
+        self.messaging.parse_identification(b"peerident", "conn_id1")
+
+        msg = snakemq.message.Message(b"data", ttl=None)
+        frame = self.messaging.frame_message(msg)
+        payload = frame[snakemq.messaging.FRAME_TYPE_SIZE:]
+        self.messaging.parse_message(payload, "conn_id1")
+        message = self.messaging.on_message_recv.call_args[0][2]
+        self.assertEqual(message.ttl, None)
 
 #############################################################################
 #############################################################################
