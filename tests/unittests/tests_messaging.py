@@ -14,6 +14,8 @@ import snakemq.exceptions
 
 import utils
 
+memview = snakemq.messaging.memview
+
 #############################################################################
 #############################################################################
 
@@ -54,6 +56,20 @@ class TestMessaging(utils.TestCase):
 
     ##############################################################
 
+    def test_protocol_version_frame(self):
+        frame = self.messaging.frame_protocol_version()
+        payload = memview(frame)[snakemq.messaging.FRAME_TYPE_SIZE:]
+        self.messaging.parse_protocol_version(payload, "connid")
+
+    ##############################################################
+
+    def test_identification_frame(self):
+        frame = self.messaging.frame_identification()
+        payload = memview(frame)[snakemq.messaging.FRAME_TYPE_SIZE:]
+        self.messaging.parse_identification(payload, "connid")
+
+    ##############################################################
+
     def test_message_frame(self):
         self.messaging.on_message_recv = mock.Mock()
         # dummy peer
@@ -61,7 +77,7 @@ class TestMessaging(utils.TestCase):
 
         msg = snakemq.message.Message(b"data", ttl=0x123456)
         frame = self.messaging.frame_message(msg)
-        payload = frame[snakemq.messaging.FRAME_TYPE_SIZE:]
+        payload = memview(frame)[snakemq.messaging.FRAME_TYPE_SIZE:]
         self.messaging.parse_message(payload, "conn_id1")
         message = self.messaging.on_message_recv.call_args[0][2]
         self.assertTrue(isinstance(message, snakemq.message.Message))
@@ -78,7 +94,7 @@ class TestMessaging(utils.TestCase):
 
         msg = snakemq.message.Message(b"data", ttl=None)
         frame = self.messaging.frame_message(msg)
-        payload = frame[snakemq.messaging.FRAME_TYPE_SIZE:]
+        payload = memview(frame)[snakemq.messaging.FRAME_TYPE_SIZE:]
         self.messaging.parse_message(payload, "conn_id1")
         message = self.messaging.on_message_recv.call_args[0][2]
         self.assertEqual(message.ttl, None)

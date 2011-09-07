@@ -35,9 +35,16 @@ import snakemq.version
 ############################################################################
 
 try:
-    memoryview
+    memview = memoryview
+    def memstr(x):
+        if isinstance(x, memoryview):
+            return x.tobytes()
+        else:
+            return bytes(x)
 except NameError:
-    memoryview = buffer
+    memview = buffer
+    def memstr(x):
+        return bytes(x)
 
 ############################################################################
 ############################################################################
@@ -135,7 +142,8 @@ class Messaging(object):
         if len(payload) != FRAME_FORMAT_PROTOCOL_VERSION_SIZE:
             raise SnakeMQBrokenMessage("protocol version")
 
-        protocol = struct.unpack(FRAME_FORMAT_PROTOCOL_VERSION, payload)[0]
+        protocol = struct.unpack(FRAME_FORMAT_PROTOCOL_VERSION, 
+                          memstr(payload[:FRAME_FORMAT_PROTOCOL_VERSION_SIZE]))[0]
         if protocol != snakemq.version.PROTOCOL_VERSION:
             self.send_incompatible_protocol(conn_id)
             raise SnakeMQIncompatibleProtocol(
@@ -150,8 +158,8 @@ class Messaging(object):
 
     ###########################################################
 
-    def parse_identification(self, remote_ident, conn_id):
-        remote_ident = remote_ident.decode(ENCODING, "replace")
+    def parse_identification(self, payload, conn_id):
+        remote_ident = memstr(payload).decode(ENCODING, "replace")
         self.log.debug("conn=%s remote ident '%s'" % (conn_id, remote_ident))
 
         if conn_id in self._ident_by_conn:
@@ -182,10 +190,10 @@ class Messaging(object):
             raise SnakeMQNoIdent(conn_id)
 
         muuid, ttl, flags = struct.unpack(FRAME_FORMAT_MESSAGE,
-                                          payload[:FRAME_FORMAT_MESSAGE_SIZE])
+                                        memstr(payload[:FRAME_FORMAT_MESSAGE_SIZE]))
         if ttl == INFINITE_TTL:
             ttl = None
-        message = Message(data=bytes(payload[FRAME_FORMAT_MESSAGE_SIZE:]),
+        message = Message(data=memstr(payload[FRAME_FORMAT_MESSAGE_SIZE:]),
                           uuid=muuid, ttl=ttl, flags=flags)
         self.on_message_recv(conn_id, ident, message)
 
@@ -198,7 +206,7 @@ class Messaging(object):
                 raise SnakeMQBrokenMessage("too small")
 
             frame_type = ord(packet[:FRAME_TYPE_SIZE])
-            payload = memoryview(packet)[FRAME_TYPE_SIZE:]
+            payload = memview(packet)[FRAME_TYPE_SIZE:]
 
             # TODO allow parse_* calls only after protocol version negotiation
             if frame_type == FRAME_TYPE_PROTOCOL_VERSION:
@@ -206,7 +214,7 @@ class Messaging(object):
             elif frame_type == FRAME_TYPE_INCOMPATIBLE_PROTOCOL:
                 self.parse_incompatible_protocol(conn_id)
             elif frame_type == FRAME_TYPE_IDENTIFICATION:
-                self.parse_identification(bytes(payload), conn_id)
+                self.parse_identification(payload, conn_id)
             elif frame_type == FRAME_TYPE_MESSAGE:
                 self.parse_message(payload, conn_id)
             elif frame_type == FRAME_TYPE_PING:
