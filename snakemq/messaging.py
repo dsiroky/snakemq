@@ -233,6 +233,7 @@ class Messaging(object):
                             snakemq.version.PROTOCOL_VERSION))
 
     def send_protocol_version(self, conn_id):
+        self.log.debug("conn=%s sending protocol version" % conn_id)
         self.packeter.send_packet(conn_id, self.frame_protocol_version())
 
     ###########################################################
@@ -241,6 +242,7 @@ class Messaging(object):
         return struct.pack(FRAME_TYPE_TYPE, FRAME_TYPE_INCOMPATIBLE_PROTOCOL)
 
     def send_incompatible_protocol(self, conn_id):
+        self.log.debug("conn=%s sending incompatible protocol" % conn_id)
         self.packeter.send_packet(conn_id, self.frame_incompatible_protocol())
 
     ###########################################################
@@ -250,6 +252,7 @@ class Messaging(object):
                 self.identifier.encode(ENCODING))
 
     def send_identification(self, conn_id):
+        self.log.debug("conn=%s sending identification" % conn_id)
         self.packeter.send_packet(conn_id, self.frame_identification())
 
     ###########################################################

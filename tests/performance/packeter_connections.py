@@ -111,8 +111,6 @@ def cli_proc():
 
 ###########################################################################
 
-snakemq.init()
-
 # avoid logging overhead
 logger = logging.getLogger("snakemq")
 logger.setLevel(logging.ERROR)
