@@ -7,6 +7,9 @@
 
 import threading
 
+import nose
+import mock
+
 import snakemq.link
 import snakemq.packeter
 
@@ -121,6 +124,13 @@ class TestPacketer(utils.TestCase):
         self.run_srv_cli(server, client)
         self.assertEqual(to_send, container["received"],
                         (len(to_send), len(container["received"])))
+
+    ########################################################
+
+    @nose.tools.raises(snakemq.exceptions.NoConnection)
+    def test_send_no_connection(self):
+        packeter = snakemq.packeter.Packeter(link=mock.Mock())
+        packeter.send_packet("nonexistent_id", "data")
 
 #############################################################################
 #############################################################################

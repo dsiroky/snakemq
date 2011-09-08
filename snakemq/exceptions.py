@@ -9,6 +9,11 @@ class SnakeMQException(Exception):
     pass
 
 ###################################################################
+
+class NoConnection(SnakeMQException):
+    pass
+
+###################################################################
 # link
 class SendNotFinished(SnakeMQException):
     pass

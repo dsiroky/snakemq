@@ -12,6 +12,7 @@ import logging
 import struct
 from collections import deque
 
+from snakemq.exceptions import NoConnection
 from snakemq.buffers import StreamBuffer
 from snakemq.exceptions import SnakeMQBrokenPacket
 from snakemq.callbacks import Callback
@@ -121,7 +122,10 @@ class Packeter(object):
         :return: packet id
         """
         assert type(buf) == bytes
-        conn = self._connections[conn_id]
+        try:
+            conn = self._connections[conn_id]
+        except KeyError:
+            raise NoConnection
 
         self._last_packet_id += 1
         packet_id = self._last_packet_id

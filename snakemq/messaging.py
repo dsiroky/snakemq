@@ -23,7 +23,8 @@ import re
 import time
 
 from snakemq.exceptions import (SnakeMQBrokenMessage, SnakeMQException,
-                                SnakeMQIncompatibleProtocol, SnakeMQNoIdent)
+                                SnakeMQIncompatibleProtocol, SnakeMQNoIdent,
+                                NoConnection)
 from snakemq.queues import QueuesManager
 from snakemq.message import Message
 from snakemq.callbacks import Callback
@@ -120,8 +121,12 @@ class Messaging(object):
 
     def _on_connect(self, conn_id):
         self._touch_keepalive(conn_id)
-        self.send_protocol_version(conn_id)
-        self.send_identification(conn_id)
+        try:
+            self.send_protocol_version(conn_id)
+            self.send_identification(conn_id)
+        except NoConnection:
+            # just leave it
+            pass
 
     ###########################################################
 

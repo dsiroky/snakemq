@@ -99,6 +99,14 @@ class TestMessaging(utils.TestCase):
         message = self.messaging.on_message_recv.call_args[0][2]
         self.assertEqual(message.ttl, None)
 
+    ##############################################################
+
+    def test_greetings_no_connection(self):
+        self.messaging.packeter.send_packet.side_effect = \
+                                                snakemq.exceptions.NoConnection
+        self.messaging._on_connect("nonexistent_id")
+        self.messaging._on_disconnect("nonexistent_id")
+
 #############################################################################
 #############################################################################
 
