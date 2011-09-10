@@ -189,6 +189,16 @@ class TestLinkSSL(TestLink):
         link_client.add_connector(("localhost", TEST_PORT), ssl_config=cfg)
         return link_server, link_client
 
+    ########################################################
+
+    def test_ssl_handshake_none_sslobj(self):
+        link = snakemq.link.Link()
+        sock = mock.Mock()
+        sock.sock._sslobj = None
+        link._in_ssl_handshake = mock.Mock()
+        link.poller = mock.Mock()
+        self.assertEqual(link.ssl_handshake(sock), snakemq.link.SSL_HANDSHAKE_FAILED)
+
 #############################################################################
 #############################################################################
 

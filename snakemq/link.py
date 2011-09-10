@@ -494,8 +494,17 @@ class Link(object):
         failed = False
         err = None
 
+        if sock.sock._sslobj is None:
+            return SSL_HANDSHAKE_FAILED
+
         try:
-            sock.sock.do_handshake()
+            if sock.sock._sslobj is None:
+                # this might be caused by SSL-wrapping a socket with not
+                # fully created connection (like if you nmap a port)
+                failed = True
+                err = "no _sslobj"
+            else:
+                sock.sock.do_handshake()
         except ssl.SSLError as exc:
             err = exc
             if err.args[0] == ssl.SSL_ERROR_WANT_READ:

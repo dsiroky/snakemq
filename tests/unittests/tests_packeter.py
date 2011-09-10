@@ -130,7 +130,7 @@ class TestPacketer(utils.TestCase):
     @nose.tools.raises(snakemq.exceptions.NoConnection)
     def test_send_no_connection(self):
         packeter = snakemq.packeter.Packeter(link=mock.Mock())
-        packeter.send_packet("nonexistent_id", "data")
+        packeter.send_packet("nonexistent_id", b"data")
 
 #############################################################################
 #############################################################################
