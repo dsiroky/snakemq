@@ -1,5 +1,12 @@
 Changelog
 =========
+0.5.9 (2011-08-19)
+  * winpoll.py renamed to poll.py and substitutes epoll() when missing
+  * fix failing on a short connection which is closed by OS immediately
+    after creation
+  * fix buffer/memory python compatibility issues
+  * fix ttl=None/infinite TTL
+
 0.5.8 (2011-08-19)
   * keep-alive - ping/pong to test if the peer connection is alive
   * fix MSW poll bell nonblocking issue

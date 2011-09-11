@@ -5,5 +5,5 @@
           U{http://www.opensource.org/licenses/mit-license.php})
 """
 
-VERSION = "0.5.9pre"
+VERSION = "0.5.9"
 PROTOCOL_VERSION = 1
