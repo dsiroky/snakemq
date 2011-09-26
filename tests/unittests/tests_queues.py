@@ -52,7 +52,7 @@ class TestQueue(utils.TestCase):
 
     def test_simple_put_get(self):
         """
-        Few puts, few gets, no TTL or persistency
+        Few puts, few gets, no TTL or persistence
         """
         queue = self.queues_manager.get_queue("testqueue")
         queue.connect()
@@ -117,7 +117,7 @@ class TestQueue(utils.TestCase):
 
     ##################################################################
 
-    def test_persistency(self):
+    def test_persistence(self):
         """
         Without TTL.
         """
@@ -145,7 +145,7 @@ class TestQueue(utils.TestCase):
 
     ##################################################################
 
-    def test_persistency_restart(self):
+    def test_persistence_restart(self):
         """
         Test of persistent items load.
         """
@@ -171,7 +171,7 @@ class TestQueue(utils.TestCase):
 
     ##################################################################
 
-    def test_persistency_ttl(self):
+    def test_persistence_ttl(self):
         queue = self.queues_manager.get_queue("testqueue")
         queue.connect()
         queue.push(Message(b"data a", uuid=b"a", ttl=1, flags=FLAG_PERSISTENT))
@@ -242,7 +242,7 @@ class BaseTestStorageMixin(object):
 
     ####################################################
 
-    def test_persistency(self):
+    def test_persistence(self):
         self.assertEqual(len(self.storage.get_queues()), 0)
         self.storage.push("q1", Message(b"a"))
         self.assertEqual(len(self.storage.get_queues()), 1)
@@ -257,7 +257,7 @@ class BaseTestStorageMixin(object):
 
     ####################################################
 
-    def test_message_attributes_persistency(self):
+    def test_message_attributes_persistence(self):
         old_msg = Message(b"a", ttl=100, flags=1234)
         self.storage.push("q1", old_msg)
         self.storage.close()
@@ -317,7 +317,7 @@ class BaseTestStorageMixin(object):
 
 class TestMemoryStorage(BaseTestStorageMixin, utils.TestCase):
     """
-    Only "fake" persistency can be tested.
+    Only "fake" persistence can be tested.
     """
 
     perm_storage = None  #: fake permanent storage

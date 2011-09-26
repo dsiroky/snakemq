@@ -1,6 +1,6 @@
 Changelog
 =========
-0.5.9 (2011-08-19)
+0.5.9 (2011-09-12)
   * winpoll.py renamed to poll.py and substitutes epoll() when missing
   * fix failing on a short connection which is closed by OS immediately
     after creation
