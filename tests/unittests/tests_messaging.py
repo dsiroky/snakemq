@@ -104,8 +104,26 @@ class TestMessaging(utils.TestCase):
     def test_greetings_no_connection(self):
         self.messaging.packeter.send_packet.side_effect = \
                                                 snakemq.exceptions.NoConnection
+        # must not raise NoConnection
         self.messaging._on_connect("nonexistent_id")
         self.messaging._on_disconnect("nonexistent_id")
+
+    ##############################################################
+
+    def test_on_message_recv(self):
+        self.messaging.on_message_sent = mock.Mock()
+        packet_id = 123
+        self.messaging.packeter.send_packet.side_effect = lambda *args:packet_id
+
+        # dummy peer
+        self.messaging.parse_identification(b"peerident", "conn_id1")
+
+        self.assertEqual(self.messaging._message_by_packet, {})
+        msg = snakemq.message.Message(b"data", uuid="abc")
+        self.messaging.send_message_frame("conn_id1", msg)
+        self.messaging._on_packet_sent("conn_id1", packet_id)
+        self.assertEqual(self.messaging.on_message_sent.call_args[0],
+                            ("conn_id1", "peerident", msg.uuid))
 
 #############################################################################
 #############################################################################

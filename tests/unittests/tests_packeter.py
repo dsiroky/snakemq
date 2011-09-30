@@ -132,6 +132,24 @@ class TestPacketer(utils.TestCase):
         packeter = snakemq.packeter.Packeter(link=mock.Mock())
         packeter.send_packet("nonexistent_id", b"data")
 
+    ########################################################
+
+    def test_on_packet_sent(self):
+        packeter = snakemq.packeter.Packeter(link=mock.Mock())
+        packeter.on_packet_sent = mock.Mock()
+        packeter._on_connect("connid1")
+        packeter._on_connect("connid2")
+        N = 3
+        pid1 = packeter.send_packet("connid1", b"a" * N)
+        pid2 = packeter.send_packet("connid2", b"b" * N)
+        # "send" single packet
+        # if the second packet will be sent first then it must return
+        # correct packet_id
+        packeter._on_ready_to_send("connid2", N + snakemq.packeter.SIZEOF_BIN_SIZE)
+        self.assertEqual(packeter.on_packet_sent.call_count, 1)
+        self.assertEqual(packeter.on_packet_sent.call_args[0],
+                            ("connid2", pid2))
+
 #############################################################################
 #############################################################################
 

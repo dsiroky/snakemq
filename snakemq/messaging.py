@@ -97,6 +97,7 @@ class Messaging(object):
         #{ callbacks
         self.on_error = Callback()  #: ``func(conn_id, exception)``
         self.on_message_recv = Callback()  #: ``func(conn_id, ident, message)``
+        self.on_message_sent = Callback()  #: ``func(conn_id, idemt, message_uuid)``
         self.on_connect = Callback()  #: ``func(conn_id, ident)``
         self.on_disconnect = Callback()  #: ``func(conn_id, ident)``
         #}
@@ -104,11 +105,13 @@ class Messaging(object):
         self._ident_by_conn = {}
         self._conn_by_ident = {}
         self._keepalive = {}  #: conn_id:[last_recv, last_ping]
+        self._message_by_packet = {}  #: packet id: message uuid
 
         packeter.link.on_loop_pass.add(self._on_link_loop_pass)
         packeter.on_connect.add(self._on_connect)
         packeter.on_disconnect.add(self._on_disconnect)
         packeter.on_packet_recv.add(self._on_packet_recv)
+        packeter.on_packet_sent.add(self._on_packet_sent)
 
         self._lock = threading.Lock()
 
@@ -232,6 +235,13 @@ class Messaging(object):
 
     ###########################################################
 
+    def _on_packet_sent(self, conn_id, packet_id):
+        msg_uuid = self._message_by_packet[packet_id]
+        ident = self._ident_by_conn[conn_id]
+        self.on_message_sent(conn_id, ident, msg_uuid)
+
+    ###########################################################
+
     def frame_protocol_version(self):
         return (struct.pack(FRAME_TYPE_TYPE, FRAME_TYPE_PROTOCOL_VERSION) +
                 struct.pack(FRAME_FORMAT_PROTOCOL_VERSION,
@@ -273,7 +283,8 @@ class Messaging(object):
                 message.data)
 
     def send_message_frame(self, conn_id, message):
-        self.packeter.send_packet(conn_id, self.frame_message(message))
+        pid = self.packeter.send_packet(conn_id, self.frame_message(message))
+        self._message_by_packet[pid] = message.uuid
 
     ###########################################################
 

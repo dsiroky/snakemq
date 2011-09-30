@@ -10,6 +10,7 @@ Callbacks
 .. autoinstanceattribute:: snakemq.messaging.Messaging.on_connect
 .. autoinstanceattribute:: snakemq.messaging.Messaging.on_disconnect
 .. autoinstanceattribute:: snakemq.messaging.Messaging.on_message_recv
+.. autoinstanceattribute:: snakemq.messaging.Messaging.on_message_sent
 
 Keep-alive
 ----------

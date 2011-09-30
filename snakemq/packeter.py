@@ -82,6 +82,7 @@ class ConnectionInfo(object):
         self.send_buffer = StreamBuffer()
         self.recv_buffer = ReceiveBuffer()
         self.send_in_progress = False
+        self.queued_packet_ids = deque()  # pairs of (packet_length, packet_id)
 
 ############################################################################
 ############################################################################
@@ -104,7 +105,6 @@ class Packeter(object):
         #}
 
         self._connections = {}  # conn_id:ConnectionInfo
-        self._queued_packets = deque()
         self._last_packet_id = 0
 
         self.link.on_connect.add(self._on_connect)
@@ -132,7 +132,7 @@ class Packeter(object):
 
         buf = size_to_bin(len(buf)) + buf
         conn.send_buffer.put(buf)
-        self._queued_packets.append((len(buf), packet_id))
+        conn.queued_packet_ids.append((len(buf), packet_id))
         self._send_to_link(conn_id, conn)
 
         return packet_id
@@ -176,11 +176,11 @@ class Packeter(object):
 
         conn.send_buffer.cut(sent_length)
         while sent_length > 0:
-            first, packet_id = self._queued_packets.popleft()
+            first, packet_id = conn.queued_packet_ids.popleft()
             if first <= sent_length:
                 self.on_packet_sent(conn_id, packet_id)
             else:
-                self._queued_packets.appendleft((first - sent_length,
+                conn.queued_packet_ids.appendleft((first - sent_length,
                                                 packet_id))
             sent_length -= first
 
