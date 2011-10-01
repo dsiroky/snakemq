@@ -34,8 +34,6 @@ class Message(object):
         self.flags = flags
         self.uuid = (uuid or bytes(uuid_module.uuid4().bytes))[:MAX_UUID_LENGTH]
 
-        self._packet_id = None
-
     ############################################################
 
     def __repr__(self):
