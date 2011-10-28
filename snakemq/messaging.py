@@ -236,7 +236,10 @@ class Messaging(object):
     ###########################################################
 
     def _on_packet_sent(self, conn_id, packet_id):
-        msg_uuid = self._message_by_packet[packet_id]
+        try:
+            msg_uuid = self._message_by_packet[packet_id]
+        except KeyError:
+            return
         ident = self._ident_by_conn[conn_id]
         self.on_message_sent(conn_id, ident, msg_uuid)
 
