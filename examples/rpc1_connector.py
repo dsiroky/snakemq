@@ -57,7 +57,7 @@ srpc.register_object(B(), "b")
 
 proxy = crpc.get_proxy("boss", "abc")
 
-proxy.as_signal("mysignal", 10)
+proxy.mysignal.as_signal(10)
 proxy.mysignal()
 
 s.loop()

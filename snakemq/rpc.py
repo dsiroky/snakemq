@@ -11,6 +11,7 @@ import threading
 import uuid
 import warnings
 import logging
+import time
 from binascii import b2a_hex
 
 from snakemq.message import Message
@@ -47,6 +48,18 @@ class SignalCallWarning(Warning):
     """ signal method called normally or regular method called as signal """
     pass
 
+class CallError(Error):
+    pass
+
+class NotConnected(CallError):
+    """ timeouted call - peer is not connected in the time of the call """
+    pass
+
+class PartialCall(CallError):
+    """ tiemouted call - client did send a request but peer disconnected
+    before proper response """
+    pass
+
 ###############################################################################
 ###############################################################################
 # functions
@@ -61,6 +74,9 @@ def as_signal(method):
     """
     setattr(method, METHOD_RPC_AS_SIGNAL_ATTR, True)
     return method
+
+# for better mock patching
+get_time = time.time
 
 ###############################################################################
 ###############################################################################
@@ -114,6 +130,8 @@ class RpcServer(object):
     ######################################################
 
     def call_method(self, ident, params):
+        # TODO timeout for reply
+
         if __debug__:
             self.log.debug("%s method ident=%r obj=%r method=%r" %
                    (params["command"], ident, params["object"], params["method"]))
@@ -181,11 +199,14 @@ class RemoteMethod(object):
     def __init__(self, iproxy, name):
         self.iproxy = iproxy
         self.name = name
+        self.call_timeout = None
+        self.signal_timeout = None
+
+    ######################################################
 
     def __call__(self, *args, **kwargs):
         # pylint: disable=W0212
-        timeout = self.iproxy._as_signal.get(self.name)
-        if timeout is None:
+        if self.signal_timeout is None:
             command = "call"
         else:
             command = "signal"
@@ -200,13 +221,42 @@ class RemoteMethod(object):
                   "kwargs": kwargs
                 }
             ident = self.iproxy._remote_ident
-            return self.iproxy._client.remote_request(ident, params, timeout)
+            return self.iproxy._client.remote_request(self, ident, params)
+        except CallError:
+            raise
         except Exception as exc:
             ehandler = self.iproxy._client.exception_handler
             if ehandler is None:
                 raise
             else:
                 ehandler(exc)
+
+    ######################################################
+
+    def as_signal(self, timeout=0):
+        """
+        Mark the method as a signal method and set timeout. Setting timeout
+        to None marks the method back as regular.
+        @param timeout: in seconds
+        """
+        self.signal_timeout = timeout
+    
+    ######################################################
+
+    def set_timeout(self, timeout):
+        """
+        Timeout of a regular (not signal) method call.
+        @param timeout: in seconds
+        """
+        self.call_timeout = timeout
+
+    ######################################################
+
+    def clone(self):
+        method = RemoteMethod(self.iproxy, self.name)
+        method.call_timeout = self.call_timeout
+        method.signal_timeout = self.signal_timeout
+        return method
 
 #########################################################################
 #########################################################################
@@ -216,30 +266,50 @@ class RpcInstProxy(object):
         self._client = client
         self._remote_ident = remote_ident
         self._name = name
-        self._as_signal = {}
+        self._methods = {}
         client.log.debug("new proxy %r" % self)
 
-    def __getattr__(self, name):
-        key = self._remote_ident + self._name + name
-        with self._client.lock:
-            if key in self._client.method_proxies:
-                return self._client.method_proxies[key]
-            else:
-                self._client.log.debug("new method %r name=%r" % (self, name))
-                proxy = RemoteMethod(self, name)
-                self._client.method_proxies[key] = proxy
-                return proxy
+    ######################################################
 
-    def as_signal(self, method_name, timeout=0):
-        """
-        Method will be called without waiting for a return value.
-        @param timeout: messaging TTL
-        """
-        self._as_signal[method_name] = timeout
+    def __getattr__(self, name):
+        with self._client.lock:
+            method = self._methods.get(name)
+            if method is None:
+                self._client.log.debug("new method %r name=%r" % (self, name))
+                method = RemoteMethod(self, name)
+                self._methods[name] = method
+            return method
+
+    ######################################################
 
     def __repr__(self):
         return ("<%s 0x%x remote_ident=%r name=%r>" %
                 (self.__class__.__name__, id(self), self._remote_ident, self._name))
+
+#########################################################################
+#########################################################################
+
+class Wait(object):
+    # helper for condition.wait() with reducing timeout
+    # raises exception if the timeout is exceeded
+
+    def __init__(self, client, timeout, remote_ident, req_id):
+        self.client = client
+        self.timeout = timeout
+        self.remote_ident = remote_ident
+        self.req_id = req_id
+
+    def __call__(self, exc):
+        if self.timeout is None:
+            self.client.cond.wait()
+        else:
+            assert self.timeout > 0
+            start_time = get_time()
+            self.client.cond.wait(self.timeout)
+            self.timeout -= get_time() - start_time
+            if self.timeout <= 0:
+                self.client.waiting_for_result.discard(self.req_id)
+                raise exc
 
 #########################################################################
 #########################################################################
@@ -250,7 +320,8 @@ class RpcClient(object):
         self.receive_hook = receive_hook
         self.method_proxies = {}
         self.exception_handler = None
-        self.results = {}
+        self.results = {}  #: req_id: result
+        self.waiting_for_result = set()  # req_ids
         self.lock = threading.Lock()
         self.cond = threading.Condition(self.lock)
         self.connected = {}  #: remote_ident:bool
@@ -265,6 +336,24 @@ class RpcClient(object):
         raw = pickle.dumps(params)
         message = Message(data=REQUEST_PREFIX + raw, ttl=ttl)
         self.receive_hook.messaging.send_message(remote_ident, message)
+
+    ######################################################
+
+    def store_result(self, result):
+        req_id = result["req_id"]
+        try:
+            self.waiting_for_result.remove(req_id)
+        except KeyError:
+            # this result is no longer needed
+            pass
+        else:
+            self.results[req_id] = result
+
+    ######################################################
+
+    def get_result(self, req_id):
+        assert req_id not in self.waiting_for_result
+        return self.results.pop(req_id)
 
     ######################################################
 
@@ -287,31 +376,41 @@ class RpcClient(object):
         if __debug__:
             self.log.debug("reply req_id=%r" % b2a_hex(res["req_id"]))
         with self.cond:
-            self.results[res["req_id"]] = res
+            self.store_result(res)
             self.cond.notify_all()
 
     ######################################################
 
-    def remote_request(self, remote_ident, params, signal_timeout):
+    def remote_request(self, method, remote_ident, params):
         req_id = params["req_id"]
         if __debug__:
             self.log.debug("remote_request ident=%r obj=%r method=%r req_id=%s" %
                 (remote_ident, params["object"], params["method"], b2a_hex(req_id)))
 
-        if signal_timeout is None:
+        if method.signal_timeout is None:
             # repeat request until it is replied
             with self.cond:
+                wait = Wait(self, method.call_timeout, remote_ident, req_id)
                 while True:
+                    # TODO check also message send failure (due to a message timeout)
+                    # for both with-timeout and without-timeout calls
                     if self.connected.get(remote_ident):
+                        self.waiting_for_result.add(req_id)
                         self.send_params(remote_ident, params, 0)
                         while ((req_id not in self.results) and
                                   self.connected.get(remote_ident)):
-                            self.cond.wait()
+                            wait(PartialCall)
+
                     if self.connected.get(remote_ident):
-                        res = self.results.pop(req_id)
+                        res = self.get_result(req_id)
                         break
                     else:
-                        self.cond.wait()  # for signal from connect/di
+                        # "if" for this "else" serves 2 purposes
+                        # - if the first "if" in the loop fails then this will
+                        #   fail as well - peer is not connected, nothing was sent
+                        # - if params were sent and then peer disconnected
+                        assert req_id not in self.waiting_for_result
+                        wait(NotConnected)  # for signal from connect/di
 
             if res["ok"]:
                 return res["return"]
@@ -319,7 +418,7 @@ class RpcClient(object):
                 (exc, traceb) = res["exception"]
                 self.raise_remote_exception(exc, traceb)
         else:
-            self.send_params(remote_ident, params, signal_timeout)
+            self.send_params(remote_ident, params, method.signal_timeout)
 
     ######################################################
 
