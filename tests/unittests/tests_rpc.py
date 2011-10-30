@@ -22,6 +22,13 @@ class TestException(Exception):
 #############################################################################
 #############################################################################
 
+class UnpickableData(object):
+    def __getstate__(self):
+        raise TypeError("I'm not pickable")
+
+#############################################################################
+#############################################################################
+
 class TestRpc(utils.TestCase):
     def test_remote_method_clone(self):
         m1 = snakemq.rpc.RemoteMethod("a", "b")
@@ -52,7 +59,7 @@ class TestRpcClient(utils.TestCase):
         req_id = b"some id"
         params = defaultdict(lambda: None, req_id=req_id, command="call")
         result = {"req_id": req_id, "return": "x", 
-                  "exception": (TestException(), None)}
+                  "exception": TestException(), "exception_format": ""}
 
         def wait(exc):
             self.client.store_result(result)
@@ -113,3 +120,45 @@ class TestRpcClient(utils.TestCase):
         result = {"req_id": req_id}
         self.client.store_result(result)
         self.assertEqual(self.client.results, {})
+
+#############################################################################
+#############################################################################
+
+class TestRpcServer(utils.TestCase):
+    def setUp(self):
+        self.server = snakemq.rpc.RpcServer(mock.Mock())
+
+    ##############################################################
+
+    def test_send_unpickable(self):
+        self.assertRaises(self.server.pickler.PickleError,
+                          self.server.send, "some ident", UnpickableData())
+
+    ##############################################################
+
+    def test_send_exception(self):
+        self.server.send = mock.Mock(wraps=self.server.send)
+
+        # --- send pickable exception, no exception is raised
+        # no traceback
+        exc = TestException()
+        self.server.send_exception("some ident", "req id", exc)
+        exc_value = self.server.send.call_args[0][1]["exception"]
+        exc_format = self.server.send.call_args[0][1]["exception_format"]
+        self.assertEqual(exc_value, exc)
+        self.assertEqual(exc_format, "")
+        
+        # with traceback
+        try:
+            raise exc
+        except TestException:
+            self.server.send_exception("some ident", "req id", exc)
+            exc_value = self.server.send.call_args[0][1]["exception"]
+            exc_format = self.server.send.call_args[0][1]["exception_format"]
+            self.assertEqual(exc_value, exc)
+            self.assertNotEqual(exc_format, "")
+            
+        # --- send unpickable exception, original exception must be raised
+        exc = TestException(UnpickableData())
+        self.assertRaises(exc.__class__,
+                          self.server.send_exception, "some ident", "req id", exc)

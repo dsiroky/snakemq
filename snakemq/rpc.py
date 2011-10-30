@@ -3,6 +3,9 @@
 @author: David Siroky (siroky@dasir.cz)
 @license: MIT License (see LICENSE.txt or
           U{http://www.opensource.org/licenses/mit-license.php})
+
+Picklers must have functions C{loads()}, C{dumps()} and base exception
+C{PickleError}.
 """
 
 import traceback
@@ -12,6 +15,7 @@ import uuid
 import warnings
 import logging
 import time
+import sys
 from binascii import b2a_hex
 
 from snakemq.message import Message
@@ -26,6 +30,7 @@ REPLY_PREFIX = b"rpcrep"
 
 METHOD_RPC_AS_SIGNAL_ATTR = "__snakemw_rpc_as_signal"
 
+# TODO differ between traceback and exception format
 REMOTE_TRACEBACK_ATTR = "__remote_traceback__"
 
 ###############################################################################
@@ -91,9 +96,10 @@ class RpcServer(object):
     than the link loop.
     """
 
-    def __init__(self, receive_hook):
+    def __init__(self, receive_hook, pickler=pickle):
         self.log = logging.getLogger("snakemq.rpc.server")
         self.receive_hook = receive_hook
+        self.pickler = pickler
         receive_hook.register(REQUEST_PREFIX, self.on_recv)
         self.instances = {}
         #: transfer call exception back to client (only for non-signal calls)
@@ -117,7 +123,12 @@ class RpcServer(object):
     ######################################################
 
     def on_recv(self, dummy_conn_id, ident, message):
-        params = pickle.loads(message.data[len(REQUEST_PREFIX):])
+        try:
+            params = self.pickler.loads(message.data[len(REQUEST_PREFIX):])
+        except self.pickler.PickleError as exc:
+            self.log.error("on_recv unpickle: %r" % exc)
+            return
+
         cmd = params["command"]
         if cmd in ("call", "signal"):
             # method must not block link loop
@@ -171,9 +182,19 @@ class RpcServer(object):
     def send_exception(self, ident, req_id, exc):
         if __debug__:
             self.log.debug("send_exception ident=%r" % ident)
-        traceb = traceback.format_exc()
-        data = {"ok": False, "exception": (exc, traceb), "req_id": req_id}
-        self.send(ident, data)
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        if exc_traceback is None:
+            exc_format = ""
+        else:
+            exc_format = traceback.format_exception(exc_type, exc_value,
+                                                    exc_traceback)
+        data = {"req_id": req_id, "ok": False,
+                "exception": exc, "exception_format": exc_format}
+        try:
+            self.send(ident, data)
+        except self.pickler.PickleError:
+            # raise the original exception and not the pickler's
+            raise exc
 
     ######################################################
 
@@ -186,7 +207,11 @@ class RpcServer(object):
     ######################################################
 
     def send(self, ident, data):
-        data = pickle.dumps(data)
+        try:
+            data = self.pickler.dumps(data)
+        except TypeError as exc:
+            # TypeError is raised if the object is unpickable
+            raise self.pickler.PickleError(exc)
         message = Message(data=REPLY_PREFIX + data)
         self.receive_hook.messaging.send_message(ident, message)
 
@@ -315,9 +340,10 @@ class Wait(object):
 #########################################################################
 
 class RpcClient(object):
-    def __init__(self, receive_hook):
+    def __init__(self, receive_hook, pickler=pickle):
         self.log = logging.getLogger("snakemq.rpc.client")
         self.receive_hook = receive_hook
+        self.pickler = pickler
         self.method_proxies = {}
         self.exception_handler = None
         self.results = {}  #: req_id: result
@@ -333,7 +359,7 @@ class RpcClient(object):
     ######################################################
 
     def send_params(self, remote_ident, params, ttl):
-        raw = pickle.dumps(params)
+        raw = self.pickler.dumps(params)
         message = Message(data=REQUEST_PREFIX + raw, ttl=ttl)
         self.receive_hook.messaging.send_message(remote_ident, message)
 
@@ -372,7 +398,7 @@ class RpcClient(object):
     ######################################################
 
     def on_recv(self, dummy_conn_id, dummy_ident, message):
-        res = pickle.loads(message.data[len(REPLY_PREFIX):])
+        res = self.pickler.loads(message.data[len(REPLY_PREFIX):])
         if __debug__:
             self.log.debug("reply req_id=%r" % b2a_hex(res["req_id"]))
         with self.cond:
@@ -415,8 +441,8 @@ class RpcClient(object):
             if res["ok"]:
                 return res["return"]
             else:
-                (exc, traceb) = res["exception"]
-                self.raise_remote_exception(exc, traceb)
+                self.raise_remote_exception(res["exception"],
+                                            res["exception_format"])
         else:
             self.send_params(remote_ident, params, method.signal_timeout)
 
