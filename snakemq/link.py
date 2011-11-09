@@ -157,7 +157,7 @@ class LinkSocket(object):
         try:
             self.sock.shutdown(socket.SHUT_RDWR)
         except socket.error as exc:
-            if exc.errno != errno.ENOTCONN:
+            if exc.errno not in (errno.ENOTCONN, errno.ECONNRESET):
                 raise
         self.sock.close()
         if self.is_connector:
