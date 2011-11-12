@@ -62,6 +62,7 @@ class TestRpcClient(utils.TestCase):
                   "exception": TestException(), "exception_format": ""}
 
         def wait(exc):
+            self.assertEqual(exc, snakemq.rpc.PartialCall)
             self.client.store_result(result)
 
         with mock.patch.object(snakemq.rpc.Wait, "__call__") as wait_mock:
@@ -70,7 +71,7 @@ class TestRpcClient(utils.TestCase):
             # respond is OK
             result["ok"] = True
             self.assertEqual(result["return"],
-                  self.client.remote_request(self.proxy.some_method, "some ident",
+                  self.client.remote_request("some ident", self.proxy.some_method,
                                               params))
             self.assertEqual(self.client.waiting_for_result, set())
             self.assertEqual(self.client.results, {})
@@ -78,13 +79,16 @@ class TestRpcClient(utils.TestCase):
             # respond is an exception
             result["ok"] = False
             self.assertRaises(TestException, self.client.remote_request,
-                                  self.proxy.some_method, "some ident", params)
+                                  "some ident", self.proxy.some_method, params)
             self.assertEqual(self.client.waiting_for_result, set())
             self.assertEqual(self.client.results, {})
 
     ##############################################################
 
     def test_call_timeout_not_connected(self):
+        self.client.connected = mock.Mock()
+        self.client.connected.get = mock.Mock(side_effect=lambda ident: False)
+
         method = self.proxy.some_method
         timeout = 1
         method.set_timeout(timeout)
@@ -95,11 +99,15 @@ class TestRpcClient(utils.TestCase):
             time_mock.side_effect = lambda: next(time_results)
             self.assertRaises(snakemq.rpc.NotConnected, method)
         self.assertEqual(self.client.cond.wait.call_count, 1)
+        self.assertEqual(self.client.connected.get.call_count, 2)
         self.assertEqual(self.client.waiting_for_result, set())
 
     ##############################################################
 
     def test_call_timeout_partial_call(self):
+        """
+        Timeout is caused by long reply time from the connected peer.
+        """
         self.client.connected = mock.Mock()
         self.client.connected.get = mock.Mock(side_effect=lambda ident: True)
         self.client.send_params = mock.Mock()
@@ -113,6 +121,7 @@ class TestRpcClient(utils.TestCase):
             time_mock.side_effect = lambda: next(time_results)
             self.assertRaises(snakemq.rpc.PartialCall, method)
         self.assertEqual(self.client.cond.wait.call_count, 1)
+        self.assertEqual(self.client.connected.get.call_count, 2)
 
         # subsequent reception of result must not be saved
         req_id = self.client.send_params.call_args[0][1]["req_id"]

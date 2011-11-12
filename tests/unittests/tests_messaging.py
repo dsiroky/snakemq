@@ -122,8 +122,8 @@ class TestMessaging(utils.TestCase):
         msg = snakemq.message.Message(b"data", uuid=b"abc")
         self.messaging.send_message_frame("conn_id1", msg)
         self.messaging._on_packet_sent("conn_id1", packet_id)
-        self.assertEqual(self.messaging.on_message_sent.call_args[0],
-                            ("conn_id1", "peerident", msg.uuid))
+        self.messaging.on_message_sent.assert_called_with(
+                                        "conn_id1", "peerident", msg.uuid)
 
     ##############################################################
 

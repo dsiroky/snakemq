@@ -238,7 +238,6 @@ class RemoteMethod(object):
 
         try:
             params = {
-                  "req_id": bytes(uuid.uuid4().bytes),
                   "command": command,
                   "object": self.iproxy._name,
                   "method": self.name,
@@ -246,7 +245,7 @@ class RemoteMethod(object):
                   "kwargs": kwargs
                 }
             ident = self.iproxy._remote_ident
-            return self.iproxy._client.remote_request(self, ident, params)
+            return self.iproxy._client.remote_request(ident, self, params)
         except CallError:
             raise
         except Exception as exc:
@@ -407,44 +406,64 @@ class RpcClient(object):
 
     ######################################################
 
-    def remote_request(self, method, remote_ident, params):
-        req_id = params["req_id"]
+    def call_regular(self, remote_ident, method, params):
+        req_id = params.get("req_id")
+        if req_id is None:
+            req_id = bytes(uuid.uuid4().bytes)
+            params["req_id"] = req_id
+
         if __debug__:
-            self.log.debug("remote_request ident=%r obj=%r method=%r req_id=%s" %
-                (remote_ident, params["object"], params["method"], b2a_hex(req_id)))
+            self.log.debug("call_regular ident=%r obj=%r method=%r req_id=%s" %
+                (remote_ident, params["object"], params["method"],
+                b2a_hex(req_id)))
 
-        if method.signal_timeout is None:
-            # repeat request until it is replied
-            with self.cond:
-                wait = Wait(self, method.call_timeout, remote_ident, req_id)
-                while True:
-                    # TODO check also message send failure (due to a message timeout)
-                    # for both with-timeout and without-timeout calls
-                    if self.connected.get(remote_ident):
-                        self.waiting_for_result.add(req_id)
-                        self.send_params(remote_ident, params, 0)
-                        while ((req_id not in self.results) and
-                                  self.connected.get(remote_ident)):
-                            wait(PartialCall)
+        wait = Wait(self, method.call_timeout, remote_ident, req_id)
 
-                    if self.connected.get(remote_ident):
-                        res = self.get_result(req_id)
-                        break
-                    else:
-                        # "if" for this "else" serves 2 purposes
-                        # - if the first "if" in the loop fails then this will
-                        #   fail as well - peer is not connected, nothing was sent
-                        # - if params were sent and then peer disconnected
-                        assert req_id not in self.waiting_for_result
-                        wait(NotConnected)  # for signal from connect/di
+        # repeat request until it is replied
+        with self.cond:
+            while True:
+                # TODO check also message send failure (disconnect before msg dispatch)
+                # for both with-timeout and without-timeout calls
+                if self.connected.get(remote_ident):
+                    self.waiting_for_result.add(req_id)
+                    self.send_params(remote_ident, params, 0)
+                    while ((req_id not in self.results) and
+                              self.connected.get(remote_ident)):
+                        wait(PartialCall)
 
-            if res["ok"]:
-                return res["return"]
-            else:
-                self.raise_remote_exception(res["exception"],
-                                            res["exception_format"])
+                if self.connected.get(remote_ident):
+                    res = self.get_result(req_id)
+                    break
+                else:
+                    # "if" for this "else" serves 2 purposes
+                    # - if the first "if" in the loop fails then this will
+                    #   fail as well - peer is not connected, nothing was sent
+                    # - if params were sent and then peer disconnected
+                    assert req_id not in self.waiting_for_result
+                    wait(NotConnected)  # for signal from connect/di
+
+        if res["ok"]:
+            return res["return"]
         else:
-            self.send_params(remote_ident, params, method.signal_timeout)
+            self.raise_remote_exception(res["exception"],
+                                        res["exception_format"])
+
+    ######################################################
+
+    def call_signal(self, remote_ident, method, params):
+        if __debug__:
+            self.log.debug("call_signal ident=%r obj=%r method=%r" %
+                (remote_ident, params["object"], params["method"]))
+        self.send_params(remote_ident, params, method.signal_timeout)
+
+    ######################################################
+
+    def remote_request(self, remote_ident, method, params):
+        if method.signal_timeout is None:
+            return self.call_regular(remote_ident, method, params)
+        else:
+            self.call_signal(remote_ident, method, params)
+            return None
 
     ######################################################
 
