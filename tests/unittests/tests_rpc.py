@@ -166,6 +166,7 @@ class TestRpcServer(utils.TestCase):
             exc_format = self.server.send.call_args[0][1]["exception_format"]
             self.assertEqual(exc_value, exc)
             self.assertNotEqual(exc_format, "")
+            self.assertTrue(isinstance(exc_format, str), exc_format.__class__)
             
         # --- send unpickable exception, original exception must be raised
         exc = TestException(UnpickableData())

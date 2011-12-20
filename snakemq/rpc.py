@@ -186,8 +186,8 @@ class RpcServer(object):
         if exc_traceback is None:
             exc_format = ""
         else:
-            exc_format = traceback.format_exception(exc_type, exc_value,
-                                                    exc_traceback)
+            exc_format = "".join(traceback.format_exception(exc_type, exc_value,
+                                                    exc_traceback))
         data = {"req_id": req_id, "ok": False,
                 "exception": exc, "exception_format": exc_format}
         try:
@@ -439,7 +439,6 @@ class RpcClient(object):
                     # - if the first "if" in the loop fails then this will
                     #   fail as well - peer is not connected, nothing was sent
                     # - if params were sent and then peer disconnected
-                    assert req_id not in self.waiting_for_result
                     wait(NotConnected)  # for signal from connect/di
 
         if res["ok"]:
