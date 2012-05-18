@@ -149,7 +149,7 @@ Client::
 
     crpc = snakemq.rpc.RpcClient(rh)
     proxy = crpc.get_proxy(REMOTE_IDENT, "myinstance")
-    proxy.as_signal("mysignal", 10)  # 10 seconds TTL
+    proxy.mysignal.as_signal(10)  # 10 seconds TTL
     my_link.loop()
 
     # in a different thread:

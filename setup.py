@@ -14,7 +14,7 @@ setup(name="snakeMQ",
       license="MIT License",
       classifiers=[
           "Operating System :: OS Independent",
-          "Development Status :: 4 - Beta",
+          "Development Status :: 5 - Production/Stable",
           "Intended Audience :: Developers",
           "License :: OSI Approved :: MIT License",
           "Topic :: System :: Networking",

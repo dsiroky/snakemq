@@ -1,5 +1,22 @@
 Changelog
 =========
+1.0
+  * fixed documentation
+
+0.5.10 (2011-12-20)
+  * messaging
+
+    * new on_message_sent() callback
+    * fix on_packet_sent() callback
+  
+  * fix packeter queuing
+  * RPC
+
+    * API change - as_signal() moved to RemoteMethod
+    * timeout for regular calls
+    * custom pickler
+    * exception traceback as a string
+
 0.5.9 (2011-09-12)
   * winpoll.py renamed to poll.py and substitutes epoll() when missing
   * fix failing on a short connection which is closed by OS immediately
