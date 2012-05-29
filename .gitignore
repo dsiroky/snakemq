@@ -1,0 +1,6 @@
+doc/epydoc
+doc/sphinx/build
+.ropeproject
+build
+dist
+*.egg-info
