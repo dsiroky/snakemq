@@ -1,6 +1,6 @@
 Changelog
 =========
-1.0
+1.0 (2012-05-18)
   * fixed documentation
 
 0.5.10 (2011-12-20)
