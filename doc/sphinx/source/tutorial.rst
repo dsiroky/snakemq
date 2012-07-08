@@ -79,6 +79,9 @@ messages as persistent::
 
   message = snakemq.message.Message(b"hello", ttl=600, flags=FLAG_PERSISTENT)
 
+SnakeMQ supports various storage types but SQLite is recommended for its speed and
+availability as a default library module.
+
 -------
 Logging
 -------
