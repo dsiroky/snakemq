@@ -13,8 +13,8 @@ snakemq.init_logging()
 logger = logging.getLogger("snakemq")
 logger.setLevel(logging.DEBUG)
 
-sslcfg = snakemq.link.SSLConfig("testroot.key",
-                                "testroot.crt")
+sslcfg = snakemq.link.SSLConfig("testpeer.key",
+                                "testpeer.crt")
 
 s = snakemq.link.Link()
 s.add_listener(("", 4000), ssl_config=sslcfg)
