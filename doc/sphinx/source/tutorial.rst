@@ -99,13 +99,29 @@ SSL context
 -----------
 To make the link secure add :class:`~.snakemq.link.SSLConfig`::
 
-  sslcfg = snakemq.link.SSLConfig("testkey.pem", "testcert.pem")
+  import ssl
+
+  sslcfg = snakemq.link.SSLConfig("testpeer.key", "testpeer.crt",
+                                  ca_certs="testroot.crt",
+                                  cert_reqs=ssl.CERT_REQUIRED)
 
   # peer A
   my_link.add_listener(("", 4000), ssl_config=sslcfg)
 
   # peer B
   my_link.add_connector(("localhost", 4000), ssl_config=sslcfg)
+
+Get peer's certificate
+--------------------------
+To get the peer's certificate use method
+:meth:`~.snakemq.link.LinkSocket.getpeercert()`. For example your link's
+``on_connect()`` might look like::
+
+  def on_connect(conn):
+      sock = slink.get_socket_by_conn(conn)
+      print sock.getpeercert()
+
+See ``examples/ssl_*.py``.
 
 ---------------------
 Remote Procedure Call
