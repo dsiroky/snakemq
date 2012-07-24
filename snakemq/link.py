@@ -190,6 +190,18 @@ class LinkSocket(object):
         return "<%s 0x%x fileno=%r conn_id=%r>" % (self.__class__.__name__, id(self),
                                       self.fileno(), self.conn_id)
 
+    #########################################################
+
+    def getpeercert(self, binary_form=False):
+        """
+        :see: python documentation - ssl.SSLSocket.getpeercert()
+        :return: peer's SSL certificate if available or None
+        """
+        if self.ssl_config is None:
+            return None
+        else:
+            return self.sock._sslobj.peer_certificate(binary_form)
+
 ############################################################################
 ############################################################################
 
