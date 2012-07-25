@@ -17,6 +17,11 @@ Homepage
 ========
 http://www.snakemq.net
 
+Download
+========
+  * packages at `PyPI <http://pypi.python.org/pypi/snakeMQ>`_
+  * repository at `github <https://github.com/dsiroky/snakemq>`_
+
 Documentation
 =============
 http://www.snakemq.net/doc
