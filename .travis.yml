@@ -6,4 +6,4 @@ python:
 # command to install dependencies, e.g. pip install -r requirements.txt --use-mirrors
 #install:
 # command to run tests, e.g. python setup.py test
-script: cd tests\unittests; python run.py
+script: cd tests/unittests; python run.py
