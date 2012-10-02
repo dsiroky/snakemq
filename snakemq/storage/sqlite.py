@@ -6,9 +6,9 @@ SQLite queue storage.
 @license: MIT License (see LICENSE.txt)
 """
 
-from binascii import b2a_hex, a2b_hex
-
+import platform
 import sqlite3
+from binascii import b2a_hex, a2b_hex
 
 from snakemq.message import Message, MAX_UUID_LENGTH
 from snakemq.messaging import MAX_IDENT_LENGTH
@@ -27,8 +27,10 @@ class SqliteQueuesStorage(QueuesStorageBase):
     ####################################################
 
     def sweep(self):
-        with self.conn:
-            self.crs.execute("""VACUUM""")
+        # PyPy has broken VACUUM implementation
+        if platform.python_implementation() != "PyPy":
+            with self.conn:
+                self.crs.execute("""VACUUM""")
 
     ####################################################
 
