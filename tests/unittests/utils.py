@@ -13,3 +13,10 @@ import unittest
 class TestCase(unittest.TestCase):
     def shortDescription(self):
         return str(self)
+
+    ######### missing asserts
+
+    # py2.6 does not have assertNotIn
+    if not hasattr(unittest.TestCase, "assertNotIn"):
+        def assertNotIn(self, a, b):
+            return self.assertTrue(a not in b, (a, b))
