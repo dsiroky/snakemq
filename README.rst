@@ -13,6 +13,8 @@ Features
   * brokerless - similar philosophy like `ZeroMQ <http://www.zeromq.org/>`_
   * additional modules - RPC
 
+Tested and working with Python versions: 2.6, 2.7, 3.2, pypy
+
 Homepage
 ========
 http://www.snakemq.net
