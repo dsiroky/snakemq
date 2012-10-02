@@ -8,6 +8,7 @@
 import os
 import errno
 import threading
+import socket
 
 import mock
 from nose.tools import timed
@@ -195,9 +196,24 @@ class TestLinkSSL(TestLink):
         link = snakemq.link.Link()
         sock = mock.Mock()
         sock.sock._sslobj = None
-        link._in_ssl_handshake = mock.Mock()
+        link._in_ssl_handshake.add(sock)
         link.poller = mock.Mock()
         self.assertEqual(link.ssl_handshake(sock), snakemq.link.SSL_HANDSHAKE_FAILED)
+        self.assertNotIn(sock, link._in_ssl_handshake)
+
+    ########################################################
+
+    def test_failed_handshake_cleanup(self):
+        link = snakemq.link.Link()
+        sock = mock.Mock()
+        sock.sock._sslobj = mock.Mock()  # anything but None
+        sock.sock.do_handshake.side_effect = socket.error()
+        link._in_ssl_handshake.add(sock)
+        link.handle_close = mock.Mock()
+        link.poller = mock.Mock()
+        self.assertEqual(link.ssl_handshake(sock), snakemq.link.SSL_HANDSHAKE_FAILED)
+        self.assertNotIn(sock, link._in_ssl_handshake)
+        self.assertEqual(link.handle_close.call_count, 1)
 
 #############################################################################
 #############################################################################
