@@ -5,6 +5,7 @@ Features
 ========
   * pure Python, cross-platform
   * automatic reconnect
+  * keep-alive for idle connections
   * reliable delivery - configurable message role and delivery timeout
   * persistent/transient queues
   * asynchronous - polling
