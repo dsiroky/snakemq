@@ -538,8 +538,8 @@ class Link(object):
         
         if failed:
             self.log.error("SSL handshake %s: %r" % (sock.conn_id, err))
-            self._in_ssl_handshake.remove(sock)
             self.handle_close(sock)
+            self._in_ssl_handshake.remove(sock)
             return SSL_HANDSHAKE_FAILED
 
         return SSL_HANDSHAKE_IN_PROGRESS
@@ -645,7 +645,6 @@ class Link(object):
             if (sock.ssl_config is None) or (sock not in self._in_ssl_handshake):
                 self.on_disconnect(sock.conn_id)
             self.del_connection_id(sock)
-        assert sock not in self._in_ssl_handshake
 
         if sock.is_connector:
             address = sock.remote_peer

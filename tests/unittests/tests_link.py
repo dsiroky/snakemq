@@ -209,7 +209,11 @@ class TestLinkSSL(TestLink):
         sock.sock._sslobj = mock.Mock()  # anything but None
         sock.sock.do_handshake.side_effect = socket.error()
         link._in_ssl_handshake.add(sock)
-        link.handle_close = mock.Mock()
+        def handle_close(sock):
+            # during handle_close() the socket must be still have
+            # the "handshake flag"
+            self.assertIn(sock, link._in_ssl_handshake)
+        link.handle_close = mock.Mock(wraps=handle_close)
         link.poller = mock.Mock()
         self.assertEqual(link.ssl_handshake(sock), snakemq.link.SSL_HANDSHAKE_FAILED)
         self.assertNotIn(sock, link._in_ssl_handshake)
