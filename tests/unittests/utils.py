@@ -20,3 +20,8 @@ class TestCase(unittest.TestCase):
     if not hasattr(unittest.TestCase, "assertNotIn"):
         def assertNotIn(self, a, b):
             return self.assertTrue(a not in b, (a, b))
+
+    # py2.6 does not have assertIn
+    if not hasattr(unittest.TestCase, "assertIn"):
+        def assertIn(self, a, b):
+            return self.assertTrue(a in b, (a, b))
