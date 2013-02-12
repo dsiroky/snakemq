@@ -4,3 +4,4 @@ doc/sphinx/build
 build
 dist
 *.egg-info
+examples/storage.db
