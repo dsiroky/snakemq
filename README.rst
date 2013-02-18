@@ -12,7 +12,7 @@ Features
   * symmetrical - single TCP connection for duplex communication
   * multiple storage options - SQLite, MongoDB, ...
   * brokerless - similar philosophy like `ZeroMQ <http://www.zeromq.org/>`_
-  * additional modules - RPC
+  * additional modules - RPC, bandwidth throttling
 
 Tested and working with Python versions: 2.6, 2.7, 3.2, pypy
 

@@ -185,3 +185,15 @@ the server side::
 If the exception is transfered and raised on the client side then it has local
 traceback. Remote traceback is stored in attribute
 ``exception.__remote_traceback__``.
+
+--------------------
+Bandwidth throttling
+--------------------
+Very simple bandwidth throttling per connection. Place a throttle between link
+and packeter::
+
+    import snakemq.throttle
+
+    my_link = snakemq.link.Link()
+    my_throttle = snakemq.throttle.Throttle(my_link, 10000) # ~10 kB/s
+    my_packeter = snakemq.packeter.Packeter(my_throttle)
