@@ -12,12 +12,12 @@ Simple callbacks helper.
 
 class Callback(object):
     def __init__(self):
-        self.callbacks = set()
+        self.callbacks = []
 
     ####################################################
 
     def add(self, func):
-        self.callbacks.add(func)
+        self.callbacks.append(func)
 
     ####################################################
 
@@ -27,5 +27,5 @@ class Callback(object):
     ####################################################
 
     def __call__(self, *args, **kwargs):
-        for callback in list(self.callbacks):
+        for callback in self.callbacks:
             callback(*args, **kwargs)
