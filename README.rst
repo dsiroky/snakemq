@@ -20,10 +20,15 @@ Homepage
 ========
 http://www.snakemq.net
 
+Forum & bugs & issues
+=====================
+  * forum at `Google Groups <https://groups.google.com/forum/#!forum/snakemq>`_
+  * bugtracking at `GitHub issues <https://github.com/dsiroky/snakemq/issues>`_
+
 Download
 ========
   * packages at `PyPI <http://pypi.python.org/pypi/snakeMQ>`_
-  * repository at `github <https://github.com/dsiroky/snakemq>`_
+  * repository at `GitHub <https://github.com/dsiroky/snakemq>`_
 
 Documentation
 =============
