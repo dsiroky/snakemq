@@ -5,6 +5,10 @@
           U{http://www.opensource.org/licenses/mit-license.php})
 """
 
+try:
+    import builtins
+except ImportError:
+    import __builtin__ as builtins
 import os
 import errno
 import threading
@@ -279,12 +283,18 @@ class TestSelectPoll(utils.TestCase):
     tests for snakemq.poll.SelectPoll
     """
 
-    def test_socekt_to_filedescriptor(self):
+    def test_socket_to_filedescriptor(self):
         """
         issue #1
         """
         socket_to_fd = snakemq.poll.SelectPoll._socket_to_fd
-        valid_classes = (int, long)
+        has_long = hasattr(builtins, "long")
+        if has_long:
+            valid_classes = (int, long)
+        else:
+            # python3 does not have long
+            valid_classes = int
         self.assertIsInstance(socket_to_fd(int(1)), valid_classes)
-        self.assertIsInstance(socket_to_fd(long(1)), valid_classes)
+        if has_long:
+            self.assertIsInstance(socket_to_fd(long(1)), valid_classes)
         self.assertIsInstance(socket_to_fd(socket.socket()), valid_classes)
