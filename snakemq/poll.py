@@ -33,6 +33,17 @@ class SelectPoll(object):
     def modify(self, fd, eventmask):
         self.fds[fd] = eventmask
 
+    @staticmethod
+    def _socket_to_fd(obj):
+        """
+        convert a socket-like object to a file descriptor
+        """
+        if hasattr(obj, "fileno"):
+            fd = obj.fileno()
+        else:
+            fd = obj
+        return fd
+
     def poll(self, timeout):
         """
         @param timeout: seconds
@@ -45,8 +56,7 @@ class SelectPoll(object):
         wlist = []
         xlist = []
         for fd, mask in self.fds.items():
-            if not isinstance(fd, int):
-                fd = fd.fileno()
+            fd = self._socket_to_fd(fd)
             if mask & select.EPOLLIN:
                 rlist.append(fd)
             if mask & select.EPOLLOUT:
@@ -69,5 +79,6 @@ class SelectPoll(object):
 
 if hasattr(select, "epoll"):
     poll = select.epoll
-else:
-    poll = SelectPoll
+#else:
+#    poll = SelectPoll
+poll = SelectPoll

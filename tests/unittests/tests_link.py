@@ -14,6 +14,7 @@ import mock
 from nose.tools import timed
 
 import snakemq.link
+import snakemq.poll
 
 import utils
 
@@ -22,8 +23,8 @@ import utils
 
 TEST_PORT = 40000
 
-LOOP_RUNTIME = 1.5
-LOOP_RUNTIME_ASSERT = 1.2  # SSL needs more time, this should be fine
+LOOP_RUNTIME = 2.5
+LOOP_RUNTIME_ASSERT = 2.2  # SSL needs more time, this should be fine
 
 #############################################################################
 #############################################################################
@@ -270,3 +271,20 @@ class TestBell(utils.TestCase):
         else:
             self.fail()
 
+#############################################################################
+#############################################################################
+
+class TestSelectPoll(utils.TestCase):
+    """
+    tests for snakemq.poll.SelectPoll
+    """
+
+    def test_socekt_to_filedescriptor(self):
+        """
+        issue #1
+        """
+        socket_to_fd = snakemq.poll.SelectPoll._socket_to_fd
+        valid_classes = (int, long)
+        self.assertIsInstance(socket_to_fd(int(1)), valid_classes)
+        self.assertIsInstance(socket_to_fd(long(1)), valid_classes)
+        self.assertIsInstance(socket_to_fd(socket.socket()), valid_classes)
