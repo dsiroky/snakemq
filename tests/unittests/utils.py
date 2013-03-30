@@ -25,3 +25,8 @@ class TestCase(unittest.TestCase):
     if not hasattr(unittest.TestCase, "assertIn"):
         def assertIn(self, a, b):
             return self.assertTrue(a in b, (a, b))
+
+    # py2.6 does not have assertIsInstance
+    if not hasattr(unittest.TestCase, "assertIsInstance"):
+        def assertIsInstance(self, a, b):
+            return self.assertTrue(isinstance(a, b), (a, b))
