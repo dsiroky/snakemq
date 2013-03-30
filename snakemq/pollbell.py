@@ -9,6 +9,7 @@ Read part must be nonblocking.
 import os
 import socket
 import errno
+import select
 
 if os.name != "nt":
     import fcntl
@@ -17,6 +18,13 @@ if os.name != "nt":
 ############################################################################
 
 class BellBase(object):
+    def __init__(self):
+        self.r = None
+        self.w = None
+
+    def wait(self, timeout=1):
+        select.select([self.r], [], [], timeout)
+
     def __repr__(self):
         return "<%s %x r=%r w=%r>" % (self.__class__.__name__,
                                       id(self), self.r, self.w)
@@ -26,6 +34,7 @@ class BellBase(object):
 
 class PosixBell(BellBase):
     def __init__(self):
+        BellBase.__init__(self)
         self.r, self.w = os.pipe()
         fcntl.fcntl(self.r, fcntl.F_SETFL, os.O_NONBLOCK)
 
@@ -47,6 +56,7 @@ class WinBell(BellBase):
     WinBell is no bell.
     """
     def __init__(self):
+        BellBase.__init__(self)
         r = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         r.bind(("127.0.0.1", 0))
         r.listen(1)

@@ -247,6 +247,7 @@ class TestBell(utils.TestCase):
         link = snakemq.link.Link()
         buf = b"abc"
         link._poll_bell.write(buf)
+        link._poll_bell.wait(0.2)
         self.assertEqual(link._poll_bell.read(len(buf)), buf)
 
     ########################################################
