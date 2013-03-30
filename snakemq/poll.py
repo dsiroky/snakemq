@@ -79,6 +79,5 @@ class SelectPoll(object):
 
 if hasattr(select, "epoll"):
     poll = select.epoll
-#else:
-#    poll = SelectPoll
-poll = SelectPoll
+else:
+    poll = SelectPoll
