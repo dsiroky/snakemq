@@ -1,5 +1,18 @@
 Changelog
 =========
+1.1 (2013-04-30)
+  * simple bandwidth throttle
+  * maintain call order in callbacks
+  * RPC - req_id logging on server side
+  * more SSL examples
+  * persistent queue examples
+  * fix unittests missing asserts
+  * fix failed SSL handshake cleanup
+  * fix PyPy sqlite storage VACUUM
+  * fix handle_close() on SSL handshake failure
+  * fix SocketPoll socket to file descriptor conversion
+  * fix TestBell.test_bell_pipe nonblocking failure
+
 1.0 (2012-05-18)
   * fixed documentation
 
