@@ -97,7 +97,8 @@ class Messaging(object):
         #{ callbacks
         self.on_error = Callback()  #: ``func(conn_id, exception)``
         self.on_message_recv = Callback()  #: ``func(conn_id, ident, message)``
-        self.on_message_sent = Callback()  #: ``func(conn_id, idemt, message_uuid)``
+        self.on_message_sent = Callback()  #: ``func(conn_id, ident, message_uuid)``
+        self.on_message_drop = Callback()  #: ``func(ident, message_uuid)``
         self.on_connect = Callback()  #: ``func(conn_id, ident)``
         self.on_disconnect = Callback()  #: ``func(conn_id, ident)``
         #}
@@ -112,6 +113,7 @@ class Messaging(object):
         packeter.on_disconnect.add(self._on_disconnect)
         packeter.on_packet_recv.add(self._on_packet_recv)
         packeter.on_packet_sent.add(self._on_packet_sent)
+        self.queues_manager.on_item_drop.add(self._on_queue_item_drop)
 
         self._lock = threading.Lock()
 
@@ -242,6 +244,12 @@ class Messaging(object):
             return
         ident = self._ident_by_conn[conn_id]
         self.on_message_sent(conn_id, ident, msg_uuid)
+
+    ###########################################################
+
+    def _on_queue_item_drop(self, queue_name, item_uuid):
+        self.log.debug("ident=%s drop %r" % (queue_name, item_uuid))
+        self.on_message_drop(queue_name, item_uuid)
 
     ###########################################################
 

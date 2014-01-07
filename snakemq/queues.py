@@ -12,6 +12,7 @@ import logging
 
 from snakemq.storage import QueuesStorageBase
 from snakemq.message import FLAG_PERSISTENT
+from snakemq.callbacks import Callback
 
 ###########################################################################
 ###########################################################################
@@ -43,6 +44,7 @@ class Queue(object):
         # remove outdated items and update TTL
         diff = time.time() - self.last_disconnect_absolute
         fresh_queue = []
+        deleted_items = []
         storage_update_ttls = []
         storage_to_delete = []
         for item in self.queue:
@@ -55,12 +57,15 @@ class Queue(object):
                 if item.flags & FLAG_PERSISTENT:
                     storage_update_ttls.append(item)
             else:
+                deleted_items.append(item)
                 if item.flags & FLAG_PERSISTENT:
                     storage_to_delete.append(item)
         if self.manager.storage:
             self.manager.storage.update_items_ttl(storage_update_ttls)
             self.manager.storage.delete_items(storage_to_delete)
         self.queue[:] = fresh_queue
+        for item in deleted_items:
+            self.manager.on_item_drop(self.name, item.uuid)
 
     ####################################################
 
@@ -129,6 +134,8 @@ class QueuesManager(object):
         if storage:
             self.load_from_storage()
             self.log.debug("queues in storage: %i" % len(self.queues))
+
+        self.on_item_drop = Callback()  #: ``func(queue_name, item_uuid)``
 
     ####################################################
 
