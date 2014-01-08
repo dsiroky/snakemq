@@ -98,7 +98,10 @@ class Messaging(object):
         self.on_error = Callback()  #: ``func(conn_id, exception)``
         self.on_message_recv = Callback()  #: ``func(conn_id, ident, message)``
         self.on_message_sent = Callback()  #: ``func(conn_id, ident, message_uuid)``
-        self.on_message_drop = Callback()  #: ``func(ident, message_uuid)``
+        #: ``func(ident, message_uuid)``
+        #: Called when the message is dropped from the queue due to the TTL
+        #: timeout.
+        self.on_message_drop = Callback()
         self.on_connect = Callback()  #: ``func(conn_id, ident)``
         self.on_disconnect = Callback()  #: ``func(conn_id, ident)``
         #}
