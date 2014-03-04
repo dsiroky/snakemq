@@ -331,6 +331,8 @@ class Link(object):
             raise ValueError("listener '%r' already set" % address)
         listen_sock = LinkSocket(ssl_config=ssl_config)
         listen_sock.listen(address)
+        if address[1] == 0:
+            address = listen_sock.sock.getsockname()
 
         fileno = listen_sock.fileno()
         self._sock_by_fd[fileno] = listen_sock
