@@ -3,8 +3,8 @@
 Queues, manager. TTL is decreased only by the disconnected time. Queue manager
 "downtime" is not included.
 
-@author: David Siroky (siroky@dasir.cz)
-@license: MIT License (see LICENSE.txt)
+:author: David Siroky (siroky@dasir.cz)
+:license: MIT License (see LICENSE.txt)
 """
 
 import time
@@ -91,7 +91,8 @@ class Queue(object):
         """
         Get first item but do not remove it. Use {Queue.pop()} to remove it
         e.g. after successful delivery. Items are always "fresh".
-        @return: item or None if empty
+
+        :return: item or None if empty
         """
         # no need to test TTL because it is filtered in connect()
         if self.queue:
@@ -104,7 +105,8 @@ class Queue(object):
     def pop(self):
         """
         Remove first item.
-        @return: None
+
+        :return: None
         """
         if not self.queue:
             return
@@ -125,7 +127,7 @@ class Queue(object):
 class QueuesManager(object):
     def __init__(self, storage):
         """
-        @param storage: None or persistent storage
+        :param storage: None or persistent storage
         """
         assert (storage is None) or isinstance(storage, QueuesStorageBase)
         self.storage = storage
@@ -147,7 +149,7 @@ class QueuesManager(object):
 
     def get_queue(self, queue_name):
         """
-        @return: Queue
+        :return: Queue
         """
         if queue_name in self.queues:
             queue = self.queues[queue_name]

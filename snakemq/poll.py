@@ -46,7 +46,7 @@ class SelectPoll(object):
 
     def poll(self, timeout):
         """
-        @param timeout: seconds
+        :param timeout: seconds
         """
         if len(self.fds) == 0:
             time.sleep(timeout)

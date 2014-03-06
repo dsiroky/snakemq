@@ -2,8 +2,8 @@
 """
 SQLite queue storage.
 
-@author: David Siroky (siroky@dasir.cz)
-@license: MIT License (see LICENSE.txt)
+:author: David Siroky (siroky@dasir.cz)
+:license: MIT License (see LICENSE.txt)
 """
 
 from binascii import b2a_hex, a2b_hex

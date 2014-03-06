@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-@author: David Siroky (siroky@dasir.cz)
-@license: MIT License (see LICENSE.txt or
+:author: David Siroky (siroky@dasir.cz)
+:license: MIT License (see LICENSE.txt or
           U{http://www.opensource.org/licenses/mit-license.php})
 """
 
@@ -12,7 +12,9 @@ import logging
 
 def init_logging(stream=None):
     """
-    Initialize logging to standard output.
+    Initialize logging (to standard output by default).
+
+    :param stream: for logging.StreamHandler
     """
     logger = logging.getLogger("snakemq")
     logger.setLevel(logging.CRITICAL)

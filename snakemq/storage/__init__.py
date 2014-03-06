@@ -2,8 +2,8 @@
 """
 Queues persistent storage.
 
-@author: David Siroky (siroky@dasir.cz)
-@license: MIT License (see LICENSE.txt)
+:author: David Siroky (siroky@dasir.cz)
+:license: MIT License (see LICENSE.txt)
 """
 
 from collections import defaultdict, deque
@@ -17,13 +17,13 @@ class QueuesStorageBase(object):
 
     def get_queues(self):
         """
-        @return: list of queues names
+        :return: list of queues names
         """
         raise NotImplementedError
 
     def get_items(self, queue_name):
         """
-        @return: items of the queue
+        :return: items of the queue
         """
         raise NotImplementedError
 

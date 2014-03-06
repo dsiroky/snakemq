@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-@author: David Siroky (siroky@dasir.cz)
-@license: MIT License (see LICENSE.txt or
+:author: David Siroky (siroky@dasir.cz)
+:license: MIT License (see LICENSE.txt or
           U{http://www.opensource.org/licenses/mit-license.php})
 
 Picklers must have functions C{loads()}, C{dumps()} and base exception
@@ -262,16 +262,18 @@ class RemoteMethod(object):
         """
         Mark the method as a signal method and set timeout. Setting timeout
         to None marks the method back as regular.
-        @param timeout: in seconds
+
+        :param timeout: in seconds
         """
         self.signal_timeout = timeout
-    
+
     ######################################################
 
     def set_timeout(self, timeout):
         """
         Timeout of a regular (not signal) method call.
-        @param timeout: in seconds
+
+        :param timeout: in seconds
         """
         self.call_timeout = timeout
 
@@ -475,6 +477,6 @@ class RpcClient(object):
 
     def get_proxy(self, remote_ident, name):
         """
-        @return: instance registered with register_object()
+        :return: instance registered with register_object()
         """
         return RpcInstProxy(self, remote_ident, name)

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-@author: David Siroky (siroky@dasir.cz)
-@license: MIT License (see LICENSE.txt or
+:author: David Siroky (siroky@dasir.cz)
+:license: MIT License (see LICENSE.txt or
           U{http://www.opensource.org/licenses/mit-license.php})
 """
 
@@ -57,7 +57,7 @@ class StreamBuffer(object):
 
     def set_max_size(self, max_size):
         """
-        @param max_size: None or number of bytes: L{StreamBuffer.put} will
+        :param max_size: None or number of bytes: L{StreamBuffer.put} will
                       block if the content will be bigger then C{max_size}.
                       WARNING: there must be only one thread inserting data at
                       a time
@@ -103,8 +103,9 @@ class StreamBuffer(object):
     def get(self, size, cut=True):
         """
         Get from the left side.
-        @param cut: True = remove returned data from buffer
-        @return: max N-bytes from the buffer.
+
+        :param cut: True = remove returned data from buffer
+        :return: max N-bytes from the buffer.
         """
         assert (((self.size > 0) and (len(self.queue) > 0))
              or ((self.size == 0) and (len(self.queue) == 0)))
