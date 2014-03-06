@@ -10,13 +10,13 @@ import logging
 ############################################################################
 ############################################################################
 
-def init_logging():
+def init_logging(stream=None):
     """
     Initialize logging to standard output.
     """
     logger = logging.getLogger("snakemq")
     logger.setLevel(logging.CRITICAL)
-    handler = logging.StreamHandler()
+    handler = logging.StreamHandler(stream)
     handler.setLevel(logging.DEBUG)
     formatter = logging.Formatter(
                     "%(asctime)s %(name)s %(levelname)s %(message)s")
