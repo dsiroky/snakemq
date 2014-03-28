@@ -1,5 +1,12 @@
 Changelog
 =========
+1.2 (2014-03-28)
+  * Python support versions 3.3, 3.4
+  * Messaging.on_message_drop() callback
+  * listener - allow choosing any available port number
+  * logging to any file instead of just stdout
+  * fix shebangs
+
 1.1 (2013-04-30)
   * simple bandwidth throttle
   * maintain call order in callbacks
@@ -21,7 +28,7 @@ Changelog
 
     * new on_message_sent() callback
     * fix on_packet_sent() callback
-  
+
   * fix packeter queuing
   * RPC
 
