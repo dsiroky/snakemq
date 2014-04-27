@@ -8,7 +8,6 @@
 import select
 import socket
 import ssl
-import os
 import errno
 import time
 import bisect
