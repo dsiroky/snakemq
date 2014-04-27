@@ -155,7 +155,7 @@ class Messaging(object):
         if len(payload) != FRAME_FORMAT_PROTOCOL_VERSION_SIZE:
             raise SnakeMQBrokenMessage("protocol version")
 
-        protocol = struct.unpack(FRAME_FORMAT_PROTOCOL_VERSION, 
+        protocol = struct.unpack(FRAME_FORMAT_PROTOCOL_VERSION,
                           memstr(payload[:FRAME_FORMAT_PROTOCOL_VERSION_SIZE]))[0]
         if protocol != snakemq.version.PROTOCOL_VERSION:
             self.send_incompatible_protocol(conn_id)

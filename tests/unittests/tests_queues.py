@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 @author: David Siroky (siroky@dasir.cz)
-@license: MIT License (see LICENSE.txt or 
+@license: MIT License (see LICENSE.txt or
           U{http://www.opensource.org/licenses/mit-license.php})
 """
 
@@ -11,7 +11,7 @@ import warnings
 import mock
 
 from snakemq.queues import QueuesManager
-from snakemq.storage import MemoryQueuesStorage 
+from snakemq.storage import MemoryQueuesStorage
 from snakemq.storage.sqlite import SqliteQueuesStorage
 from snakemq.message import Message, FLAG_PERSISTENT
 
@@ -189,7 +189,7 @@ class TestQueue(utils.TestCase):
             self.assertEqual(len(queue), 2)
             queue.connect()
             self.assertEqual(len(queue), 1)
-            
+
 ############################################################################
 ############################################################################
 
@@ -323,7 +323,7 @@ class TestMemoryStorage(BaseTestStorageMixin, utils.TestCase):
     perm_storage = None  #: fake permanent storage
 
     def storage_factory(self):
-        TestMemoryStorage.perm_storage = (TestMemoryStorage.perm_storage or 
+        TestMemoryStorage.perm_storage = (TestMemoryStorage.perm_storage or
                                     MemoryQueuesStorage())
         self.storage = TestMemoryStorage.perm_storage
 

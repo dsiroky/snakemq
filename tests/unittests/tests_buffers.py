@@ -1,7 +1,7 @@
 #! -*- coding: utf-8 -*-
 """
 @author: David Siroky (siroky@dasir.cz)
-@license: MIT License (see LICENSE.txt or 
+@license: MIT License (see LICENSE.txt or
           U{http://www.opensource.org/licenses/mit-license.php})
 """
 
@@ -77,7 +77,7 @@ class TestBuffers(utils.TestCase):
         self.assertEqual(len(self.buf), 2)
         self.buf.cut(3)
         self.assertEqual(len(self.buf), 0)
-        
+
 ############################################################################
 ############################################################################
 

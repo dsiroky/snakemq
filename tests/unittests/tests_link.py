@@ -1,7 +1,7 @@
 #! -*- coding: utf-8 -*-
 """
 @author: David Siroky (siroky@dasir.cz)
-@license: MIT License (see LICENSE.txt or 
+@license: MIT License (see LICENSE.txt or
           U{http://www.opensource.org/licenses/mit-license.php})
 """
 
@@ -259,10 +259,10 @@ class TestBell(utils.TestCase):
         """
         link = snakemq.link.Link()
         bell_rd = link._poll_bell.r
-        
+
         # no event, no descriptor returned by poll
         self.assertEqual(len(link.poll(0)), 0)
-        
+
         link.wakeup_poll()
         fds = link.poll(1.0)
         self.assertEqual(len(fds), 1)

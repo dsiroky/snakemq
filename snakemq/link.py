@@ -537,7 +537,7 @@ class Link(object):
             self.log.debug("SSL handshake done %s, cipher=%r" %
                             (sock.conn_id, sock.sock.cipher()))
             return SSL_HANDSHAKE_DONE
-        
+
         if failed:
             self.log.error("SSL handshake %s: %r" % (sock.conn_id, err))
             self.handle_close(sock)
@@ -660,7 +660,7 @@ class Link(object):
         if sock.write_buf is None:
             sock.send_finished = True
             self.poller.modify(sock, select.EPOLLIN)
-            self.log.debug("ready to send %s (last send len=%i)" % 
+            self.log.debug("ready to send %s (last send len=%i)" %
                             (sock.conn_id, sock.last_send_size))
             self.on_ready_to_send(sock.conn_id, sock.last_send_size)
         else:

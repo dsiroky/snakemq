@@ -1,7 +1,7 @@
 #! -*- coding: utf-8 -*-
 """
 @author: David Siroky (siroky@dasir.cz)
-@license: MIT License (see LICENSE.txt or 
+@license: MIT License (see LICENSE.txt or
           U{http://www.opensource.org/licenses/mit-license.php})
 """
 
@@ -58,7 +58,7 @@ class TestRpcClient(utils.TestCase):
 
         req_id = b"some id"
         params = defaultdict(lambda: None, req_id=req_id, command="call")
-        result = {"req_id": req_id, "return": "x", 
+        result = {"req_id": req_id, "return": "x",
                   "exception": TestException(), "exception_format": ""}
 
         def wait(exc):
@@ -93,7 +93,7 @@ class TestRpcClient(utils.TestCase):
         timeout = 1
         method.set_timeout(timeout)
         self.assertEqual(timeout, method.call_timeout)
-        
+
         with mock.patch("snakemq.rpc.get_time") as time_mock:
             time_results = iter([0.0, timeout * 1.1])
             time_mock.side_effect = lambda: next(time_results)
@@ -115,7 +115,7 @@ class TestRpcClient(utils.TestCase):
         method = self.proxy.some_method
         timeout = 1
         method.set_timeout(timeout)
-        
+
         with mock.patch("snakemq.rpc.get_time") as time_mock:
             time_results = iter([0.0, timeout * 1.1])
             time_mock.side_effect = lambda: next(time_results)
@@ -156,7 +156,7 @@ class TestRpcServer(utils.TestCase):
         exc_format = self.server.send.call_args[0][1]["exception_format"]
         self.assertEqual(exc_value, exc)
         self.assertEqual(exc_format, "")
-        
+
         # with traceback
         try:
             raise exc
@@ -167,7 +167,7 @@ class TestRpcServer(utils.TestCase):
             self.assertEqual(exc_value, exc)
             self.assertNotEqual(exc_format, "")
             self.assertTrue(isinstance(exc_format, str), exc_format.__class__)
-            
+
         # --- send unpickable exception, original exception must be raised
         exc = TestException(UnpickableData())
         self.assertRaises(exc.__class__,
