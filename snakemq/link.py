@@ -7,11 +7,17 @@
 
 import select
 import socket
-import ssl
 import errno
 import time
 import bisect
 import logging
+
+try:
+    import ssl
+    HAS_SSL = True
+except ImportError:
+    import dummyssl as ssl
+    HAS_SSL = False
 
 from snakemq.exceptions import SendNotFinished
 
@@ -54,6 +60,8 @@ class SSLConfig(object):
 
 class LinkSocket(object):
     def __init__(self, sock=None, ssl_config=None, remote_peer=None):
+        if (ssl_config is not None) and not HAS_SSL:
+            raise RuntimeError("ssl module is not available")
         assert (sock is None) or isinstance(sock, socket.socket)
         self.sock = sock or self.create_socket()
         self.ssl_config = ssl_config
