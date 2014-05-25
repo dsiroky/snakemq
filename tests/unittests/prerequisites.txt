@@ -3,3 +3,4 @@ mock
 sqlalchemy
 pymongo
 psycopg2
+gadfly

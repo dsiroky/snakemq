@@ -7,6 +7,7 @@
 
 import os
 import warnings
+import glob
 
 import mock
 
@@ -28,6 +29,13 @@ try:
 except ImportError:
     has_sqlalchemy = False
     warnings.warn("missing SQLAlchemy", RuntimeWarning)
+
+try:
+    from snakemq.storage.gadfly import GadflyQueuesStorage
+    has_gadfly = True
+except ImportError:
+    has_gadfly = False
+    warnings.warn("missing gadfly", RuntimeWarning)
 
 import utils
 
@@ -251,7 +259,7 @@ class BaseTestStorageMixin(object):
         self.storage.close()
 
         self.storage_factory()
-        self.assert_(len(self.storage.get_queues()) >= 1)  # at least q1
+        self.assertGreaterEqual(len(self.storage.get_queues()), 1)  # at least q1
         self.assertEqual(len(self.storage.get_items("q2")), 0)
         self.assertEqual(len(self.storage.get_items("q1")), 1)
 
@@ -370,3 +378,17 @@ class TestSqlAlchemyPgsqlStorage(BaseTestStorageMixin, utils.TestCase):
     def delete_storage(self):
         self.storage = SqlAlchemyQueuesStorage(self.URL)
         self.storage.drop_structures()
+
+############################################################################
+############################################################################
+
+class TestGadflyStorage(BaseTestStorageMixin, utils.TestCase):
+    __test__ = has_gadfly
+
+    def storage_factory(self):
+        self.storage = GadflyQueuesStorage(".", "testqueuestoragegadfly")
+
+    def delete_storage(self):
+        for ext in ("gfl", "glb", "gfd", "grl"):
+            for fn in glob.glob("*." + ext):
+                os.unlink(fn)
