@@ -30,3 +30,8 @@ class TestCase(unittest.TestCase):
     if not hasattr(unittest.TestCase, "assertIsInstance"):
         def assertIsInstance(self, a, b):
             return self.assertTrue(isinstance(a, b), (a, b))
+
+    # py2.6 does not have assertGreaterEqual
+    if not hasattr(unittest.TestCase, "assertGreaterEqual"):
+        def assertGreaterEqual(self, a, b):
+            return self.assertTrue(isinstance(a, b), (a, b))
