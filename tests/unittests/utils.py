@@ -34,4 +34,4 @@ class TestCase(unittest.TestCase):
     # py2.6 does not have assertGreaterEqual
     if not hasattr(unittest.TestCase, "assertGreaterEqual"):
         def assertGreaterEqual(self, a, b):
-            return self.assertTrue(isinstance(a, b), (a, b))
+            return self.assertTrue(a >= b, (a, b))
