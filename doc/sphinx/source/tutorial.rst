@@ -1,6 +1,32 @@
 Tutorial
 ========
 
+-----------
+Terminology
+-----------
+
+**listener**
+  Somebody must listen for incoming connections. Similar to TCP server.
+
+**connector**
+  Similar to TCP client.
+
+**peer**
+  Program running a snakeMQ stack.
+
+----------
+Connection
+----------
+The stack can have multiple connectors and listeners. Once the connection is
+made between a connector and a listener then there is internally no difference
+on both sides. You can send and receive on both sides.
+
+It does not matter who is listening and who is connecting (but obviously there
+must be a pair connector-listener). Who will be who depends on the network
+topology and the application design. E.g. if peer A is somewhere on the
+internet and peer B is behind NAT then A must have a listener and B must have a
+connector.
+
 ----------------------
 Simple messaging peers
 ----------------------
@@ -12,7 +38,7 @@ Import modules::
   import snakemq.message
 
 Build stack::
-    
+
   my_link = snakemq.link.Link()
   my_packeter = snakemq.packeter.Packeter(my_link)
   my_messaging = snakemq.messaging.Messaging(MY_IDENT, "", my_packeter)
@@ -20,7 +46,7 @@ Build stack::
 where ``MY_IDENT`` is the peer identifier e.g. ``"bob"`` or ``"alice"``. Second parameter is *domain* used for routing - currently unused.
 
 Since the link is symmetrical it does not matter who is connecting and who is listening. Every link can have arbitrary count of listeners and connectors:
-  
+
 * Bob::
 
     my_link.add_listener(("", 4000))  # listen on all interfaces and on port 4000
@@ -81,6 +107,12 @@ messages as persistent::
 
 SnakeMQ supports various storage types but SQLite is recommended for its speed and
 availability as a default library module.
+
+.. note::
+  Persistent are only **outgoing** messages. Once it is delivered it is up to the
+  other side to make sure that the message will not be lost.
+
+  It does not matter if the sending side is a connector or a listener.
 
 -------
 Logging
