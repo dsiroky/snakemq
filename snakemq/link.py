@@ -98,7 +98,7 @@ class LinkSocket(object):
     def accept(self):
         newsock, addr = self.sock.accept()
         newsock.setblocking(False)
-        if self.ssl_config:
+        if self.ssl_config is not None:
             newsock = ssl.wrap_socket(newsock, server_side=True,
                                       do_handshake_on_connect=False,
                                       ssl_version=self.ssl_config.ssl_version,
@@ -114,7 +114,7 @@ class LinkSocket(object):
 
     def connect(self):
         self.is_connector = True
-        if self.ssl_config:
+        if self.ssl_config is not None:
             self.sock = ssl.wrap_socket(self.sock, server_side=False,
                                       do_handshake_on_connect=False,
                                       ssl_version=self.ssl_config.ssl_version,
