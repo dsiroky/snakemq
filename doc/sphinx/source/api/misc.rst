@@ -1,4 +1,4 @@
-Miscelaneous
+Miscellaneous
 ============
 
 Logging
