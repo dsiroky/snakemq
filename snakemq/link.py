@@ -325,6 +325,8 @@ class Link(object):
                   for (when, _address) in self._plannned_connections
                   if _address != address]
 
+        self.handle_close(sock)
+
     ##########################################################
 
     def add_listener(self, address, ssl_config=None):
@@ -645,8 +647,10 @@ class Link(object):
     ##########################################################
 
     def handle_close(self, sock):
-        self.poller.unregister(sock)
-        del self._sock_by_fd[sock.fileno()]
+        fileno = sock.fileno()
+        if fileno in self._sock_by_fd:
+            self.poller.unregister(sock)
+            del self._sock_by_fd[fileno]
         sock.close()
 
         if sock.conn_id is not None:
