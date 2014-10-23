@@ -40,8 +40,12 @@ class Queue(object):
 
     def connect(self):
         self.connected = True
+        self.collect_garbage()
 
-        # remove outdated items and update TTL
+    ####################################################
+
+    def collect_garbage(self):
+        """ remove outdated items and update TTLs """
         diff = time.time() - self.last_disconnect_absolute
         fresh_queue = []
         deleted_items = []
