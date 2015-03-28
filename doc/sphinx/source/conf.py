@@ -46,7 +46,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'snakeMQ'
-copyright = u'2011, David Siroky'
+copyright = u'2015, David Siroky'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
