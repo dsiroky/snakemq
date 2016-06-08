@@ -176,16 +176,17 @@ class LinkSocket(object):
 
     def create_ssl_context(self):
         assert isinstance(self.sock, ssl.SSLSocket)
+
+        if hasattr(self.sock, "_sock"):
+            raw_sock = self.sock._sock  # py2
+        else:
+            raw_sock = self.sock  # py3
+
         # this is always called from handle_connect so server_side=False
         if hasattr(self.sock, "context"):
-            # py3.2
-            self.sock._sslobj = self.sock.context._wrap_socket(self.sock,
+            self.sock._sslobj = self.sock.context._wrap_socket(raw_sock,
                                                   False, None)
         else:
-            if hasattr(self.sock, "_sock"):
-                raw_sock = self.sock._sock  # py2
-            else:
-                raw_sock = self.sock  # py3.1
             self.sock._sslobj = ssl._ssl.sslwrap(raw_sock, False,
                                         self.sock.keyfile, self.sock.certfile,
                                         self.sock.cert_reqs, self.sock.ssl_version,
