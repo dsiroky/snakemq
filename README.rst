@@ -14,7 +14,7 @@ Features
   * brokerless - similar philosophy like `ZeroMQ <http://www.zeromq.org/>`_
   * additional modules - RPC, bandwidth throttling
 
-Tested and working with Python versions: 2.6, 2.7, 3.2, 3.3, 3.4, pypy
+Tested and working with Python versions: 2.6, 2.7, 3.2, 3.3, 3.4, 3.5, pypy
 
 Homepage
 ========
@@ -37,3 +37,7 @@ http://www.snakemq.net/doc
 Changelog
 =============
 http://www.snakemq.net/doc/changelog.html
+
+Notes
+=====
+Python 3.5 has broken SSL support.

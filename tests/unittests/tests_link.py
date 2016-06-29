@@ -13,6 +13,7 @@ import os
 import errno
 import threading
 import socket
+import sys
 
 import mock
 from nose.tools import timed
@@ -29,6 +30,11 @@ TEST_PORT = 40000
 
 LOOP_RUNTIME = 2.5
 LOOP_RUNTIME_ASSERT = 2.2  # SSL needs more time, this should be fine
+
+#############################################################################
+#############################################################################
+
+has_ssl = sys.version_info < (3, 5)
 
 #############################################################################
 #############################################################################
@@ -187,6 +193,8 @@ class TestLink(utils.TestCase):
 #############################################################################
 
 class TestLinkSSL(TestLink):
+    __test__ = has_ssl
+
     def create_links(self):
         cfg = snakemq.link.SSLConfig("testkey.pem", "testcert.pem")
         link_server = snakemq.link.Link()

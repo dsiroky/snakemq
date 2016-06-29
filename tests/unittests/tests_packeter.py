@@ -6,6 +6,7 @@
 """
 
 import threading
+import sys
 
 import nose
 import mock
@@ -21,6 +22,11 @@ import utils
 TEST_PORT = 40000
 
 LOOP_RUNTIME = 1.5
+
+#############################################################################
+#############################################################################
+
+has_ssl = sys.version_info < (3, 5)
 
 #############################################################################
 #############################################################################
@@ -154,6 +160,8 @@ class TestPacketer(utils.TestCase):
 #############################################################################
 
 class TestPacketerSSL(TestPacketer):
+    __test__ = has_ssl
+
     def create_links(self):
         cfg = snakemq.link.SSLConfig("testkey.pem", "testcert.pem")
         link_server = snakemq.link.Link()
