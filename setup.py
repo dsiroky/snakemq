@@ -5,7 +5,7 @@ from snakemq import version
 setup(name="snakeMQ",
       version=version.VERSION,
       description="message queuing for Python",
-      long_description = open("README.rst").read(),
+      long_description = open("README.md").read(),
       keywords=("message, messaging, queue, persistent, network, communication, "
                 "reconnect, RPC"),
       author="David Siroky",
