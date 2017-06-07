@@ -1,5 +1,8 @@
 Changelog
 =========
+1.3 (2016-06-07)
+  * fix memory leak in Messaging
+
 1.2 (2014-03-28)
   * Python support versions 3.3, 3.4
   * Messaging.on_message_drop() callback
