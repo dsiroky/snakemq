@@ -1,6 +1,9 @@
 Changelog
 =========
-1.3 (2016-06-07)
+1.4 (2017-10-07)
+  * fix pip build
+
+1.3 (2017-06-07)
   * fix memory leak in Messaging
 
 1.2 (2014-03-28)
