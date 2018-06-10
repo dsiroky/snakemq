@@ -144,9 +144,15 @@ class RpcServer(object):
         # TODO timeout for reply
 
         if __debug__:
-            self.log.debug("%s method ident=%r obj=%r method=%r req_id=%r" %
-                   (params["command"], ident, params["object"], params["method"],
-                   b2a_hex(params["req_id"])))
+            command = params["command"]
+            if command == "call":
+                self.log.debug("%s method ident=%r obj=%r method=%r req_id=%r" %
+                       (command, ident, params["object"], params["method"],
+                       b2a_hex(params["req_id"])))
+            else:
+                self.log.debug("%s method ident=%r obj=%r method=%r" %
+                       (command, ident, params["object"], params["method"]
+                       ))
 
         has_signal_attr = True  # implicit is no reply on exception
         try:
