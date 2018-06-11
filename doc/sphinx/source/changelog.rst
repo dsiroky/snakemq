@@ -1,5 +1,8 @@
 Changelog
 =========
+1.5 (2018-06-11)
+  * fix signal debug output
+
 1.4 (2017-10-07)
   * fix pip build
 
