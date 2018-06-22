@@ -172,3 +172,78 @@ class TestRpcServer(utils.TestCase):
         exc = TestException(UnpickableData())
         self.assertRaises(exc.__class__,
                           self.server.send_exception, "some ident", "req id", exc)
+
+    ##############################################################
+
+    def test_call_method__sends_response(self):
+        class DummyClass(object):
+            def my_method(self, arg1, arg2):
+                return arg1 + arg2
+        dummy_instance = DummyClass()
+
+        self.server.send = mock.Mock(wraps=self.server.send)
+        self.server.register_object(dummy_instance, "dummy_instance")
+
+        self.server.call_method("peerident", {
+                "req_id": bytes(),
+                "object": "dummy_instance",
+                "command": "call",
+                "method": "my_method",
+                "args": (3, 8),
+                "kwargs": {},
+            })
+
+        sent_data = self.server.send.call_args[0][1]
+        self.assertTrue(sent_data["ok"])
+        self.assertEqual(sent_data["return"], 11)
+
+    ##############################################################
+
+    def test_call_method_that_raises__sends_exception(self):
+        class DummyClass(object):
+            def my_method(self):
+                raise RuntimeError("failed")
+        dummy_instance = DummyClass()
+
+        self.server.send = mock.Mock(wraps=self.server.send)
+        self.server.register_object(dummy_instance, "dummy_instance")
+
+        self.server.call_method("peerident", {
+                "req_id": bytes(),
+                "object": "dummy_instance",
+                "command": "call",
+                "method": "my_method",
+                "args": (),
+                "kwargs": {},
+            })
+
+        sent_data = self.server.send.call_args[0][1]
+        self.assertFalse(sent_data["ok"])
+        self.assertTrue(isinstance(sent_data["exception"], RuntimeError))
+        self.assertEqual(str(sent_data["exception"]), "failed")
+        self.assertNotEqual(sent_data["exception_format"], "")
+
+    ##############################################################
+
+    def test_call_missing_method__sends_NoMethodError(self):
+        class DummyClass(object):
+            pass
+        dummy_instance = DummyClass()
+
+        self.server.send = mock.Mock(wraps=self.server.send)
+        self.server.register_object(dummy_instance, "dummy_instance")
+
+        self.server.call_method("peerident", {
+                "req_id": bytes(),
+                "object": "dummy_instance",
+                "command": "call",
+                "method": "unknown_method",
+                "args": (),
+                "kwargs": {},
+            })
+
+        sent_data = self.server.send.call_args[0][1]
+        self.assertFalse(sent_data["ok"])
+        self.assertTrue(isinstance(sent_data["exception"],
+                                    snakemq.rpc.NoMethodError))
+        self.assertNotEqual(sent_data["exception_format"], "")

@@ -143,9 +143,12 @@ class RpcServer(object):
     def call_method(self, ident, params):
         # TODO timeout for reply
 
+        is_call = params["command"] == "call"
+        is_signal = params["command"] == "signal"
+
         if __debug__:
             command = params["command"]
-            if command == "call":
+            if is_call:
                 self.log.debug("%s method ident=%r obj=%r method=%r req_id=%r" %
                        (command, ident, params["object"], params["method"],
                        b2a_hex(params["req_id"])))
@@ -154,7 +157,8 @@ class RpcServer(object):
                        (command, ident, params["object"], params["method"]
                        ))
 
-        has_signal_attr = True  # implicit is no reply on exception
+        transfer_exception = is_call
+
         try:
             objname = params["object"]
             try:
@@ -164,22 +168,23 @@ class RpcServer(object):
 
             try:
                 method = getattr(instance, params["method"])
-            except KeyError:
+            except AttributeError:
                 raise NoMethodError(params["method"])
 
             has_signal_attr = hasattr(method, METHOD_RPC_AS_SIGNAL_ATTR)
-            if ((params["command"] == "signal" and not has_signal_attr) or
-                (params["command"] == "call" and has_signal_attr)):
+            if ((is_signal and not has_signal_attr) or
+                (is_call and has_signal_attr)):
                 warnings.warn("wrong command match for %r" % method,
                               SignalCallWarning)
+            transfer_exception = not has_signal_attr
 
             ret = method(*params["args"], **params["kwargs"])
 
             # signals have no return value
-            if params["command"] == "call":
+            if is_call:
                 self.send_return(ident, params["req_id"], ret)
         except Exception as exc:
-            if self.transfer_exceptions and not has_signal_attr:
+            if self.transfer_exceptions and transfer_exception:
                 self.send_exception(ident, params["req_id"], exc)
             else:
                 raise
