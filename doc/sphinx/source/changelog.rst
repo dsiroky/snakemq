@@ -1,5 +1,8 @@
 Changelog
 =========
+1.6 (2018-07-03)
+  * fix missing method call flow
+
 1.5 (2018-06-11)
   * fix signal debug output
 
