@@ -107,7 +107,7 @@ class LinkSocket(object):
                                       cert_reqs=self.ssl_config.cert_reqs,
                                       ca_certs=self.ssl_config.ca_certs)
         newsock = LinkSocket(newsock, self.ssl_config)
-        self.remote_peer = addr
+        newsock.remote_peer = addr
         return newsock, addr
 
     #########################################################
