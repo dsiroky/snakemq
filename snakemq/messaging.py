@@ -118,7 +118,7 @@ class Messaging(object):
         packeter.on_packet_sent.add(self._on_packet_sent)
         self.queues_manager.on_item_drop.add(self._on_queue_item_drop)
 
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     ###########################################################
 
