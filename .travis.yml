@@ -1,14 +1,15 @@
 language: python
 python:
-  - "2.6"
+  #- "2.6" not supported in a simple Travis CI configuration
   - "2.7"
-  - "3.2"
-  - "3.3"
+  #- "3.2" not supported in a simple Travis CI configuration
+  #- "3.3" not supported in a simple Travis CI configuration
   - "3.4"
   - "3.5"
   - "3.6"
+  - "3.7"
+  - "3.8"
   - "nightly"
-  - "pypy-5.4.1"
-  #- "pypy3-5.1.1"
+  - "pypy"
+  - "pypy3"
 script: python tests/unittests/run.py
-sudo: false
