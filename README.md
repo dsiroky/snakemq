@@ -15,7 +15,7 @@ communication between hosts.
   * brokerless - similar philosophy like [ZeroMQ](http://www.zeromq.org/)
   * additional modules - RPC, bandwidth throttling
 
-Tested and working with Python versions: 2.6, 2.7, 3.2, 3.3, 3.4, 3.5, 3.6, pypy
+Tested and working with Python versions: 2.6, 2.7, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, pypy, pypy3
 
 # Homepage
 <https://github.com/dsiroky/snakemq>
