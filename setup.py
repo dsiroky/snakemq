@@ -6,6 +6,7 @@ setup(name="snakeMQ",
       version=version.VERSION,
       description="message queuing for Python",
       long_description = open("README.md").read(),
+      long_description_content_type='text/markdown',
       keywords=("message, messaging, queue, persistent, network, communication, "
                 "reconnect, RPC"),
       author="David Siroky",
@@ -30,7 +31,12 @@ setup(name="snakeMQ",
           "Programming Language :: Python :: 3.1",
           "Programming Language :: Python :: 3.2",
           "Programming Language :: Python :: 3.3",
-          "Programming Language :: Python :: 3.4"
+          "Programming Language :: Python :: 3.4",
+          "Programming Language :: Python :: 3.5",
+          "Programming Language :: Python :: 3.6",
+          "Programming Language :: Python :: 3.7",
+          "Programming Language :: Python :: 3.8",
+          "Programming Language :: Python :: 3.9",
         ],
       packages=find_packages()
     )
